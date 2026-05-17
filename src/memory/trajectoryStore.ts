@@ -13,6 +13,7 @@ export type TrajectoryRecord = {
   success: boolean;
   retries: number;
   durationMs: number;
+  embedding?: number[];
 };
 
 const ARCHIVE_AGE_DAYS = 30;
@@ -21,6 +22,7 @@ const DELETE_AGE_DAYS = 90;
 export function logTrajectory(record: TrajectoryRecord): string {
   const db = getDb();
   const id = randomUUID();
+  const embedding = record.embedding ? Buffer.from(Float32Array.from(record.embedding).buffer) : null;
 
   db.prepare(`
     INSERT INTO trajectories
@@ -39,6 +41,10 @@ export function logTrajectory(record: TrajectoryRecord): string {
     record.retries,
     record.durationMs
   );
+
+  if (embedding) {
+    db.prepare('UPDATE trajectories SET embedding = ? WHERE id = ?').run(embedding, id);
+  }
 
   logger.debug({ id, taskId: record.taskId, success: record.success }, 'trajectory logged');
   return id;

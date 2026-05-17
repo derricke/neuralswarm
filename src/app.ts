@@ -5,6 +5,7 @@ import { tasksRouter } from './routes/tasks';
 import { agentsRouter } from './routes/agents';
 import { logger } from './lib/logger';
 import { memoriesRouter } from './routes/memories';
+import { learningRouter } from './routes/learning';
 
 export function createApp() {
   const app = express();
@@ -21,6 +22,7 @@ export function createApp() {
   app.use('/tasks', tasksRouter);
   app.use('/agents', agentsRouter);
   app.use('/memories', memoriesRouter);
+  app.use('/learning', learningRouter);
 
   return app;
 }

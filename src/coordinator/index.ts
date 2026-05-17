@@ -3,6 +3,7 @@ import { getDb } from '../lib/db';
 import { spawnAgent } from '../agents/spawner';
 import { logger } from '../lib/logger';
 import { logTrajectory } from '../memory/trajectoryStore';
+import { getLearningEngine } from '../learning/engine';
 import type { AgentConfig, AgentProvider } from '../agents/types';
 
 const MAX_RETRIES = 3;
@@ -44,12 +45,15 @@ export async function runTask(taskId: string): Promise<void> {
   if (!task) throw new Error(`Task not found: ${taskId}`);
   if (task.status === 'completed') return;
 
+  const learningEngine = getLearningEngine();
+  const recommendation = await learningEngine.recommendAgentProfile(task.swarm_id, task.description);
+
   db.prepare(`UPDATE tasks SET status = 'running', updated_at = unixepoch() WHERE id = ?`).run(taskId);
 
   let attempt = task.retries;
 
   while (attempt < MAX_RETRIES) {
-    const agent = pickAgent(task.swarm_id, attempt > 0 ? task.agent_id : null);
+    const agent = pickAgent(task.swarm_id, attempt > 0 ? task.agent_id : null, recommendation);
 
     if (!agent) {
       db.prepare(
@@ -73,7 +77,7 @@ export async function runTask(taskId: string): Promise<void> {
         model: agent.model,
       };
 
-        const taskStart = Date.now();
+      const taskStart = Date.now();
       const result = await spawnAgent(task.description, config);
 
       db.prepare(
@@ -84,18 +88,18 @@ export async function runTask(taskId: string): Promise<void> {
         `UPDATE agents SET status = 'idle', consecutive_failures = 0, updated_at = unixepoch() WHERE id = ?`
       ).run(agent.id);
 
-        logTrajectory({
-          taskId,
-          swarmId: task.swarm_id,
-          agentId: agent.id,
-          provider: agent.provider,
-          model: agent.model,
-          description: task.description,
-          result: result.output,
-          success: true,
-          retries: attempt,
-          durationMs: Date.now() - taskStart,
-        });
+      await learningEngine.recordTrajectory({
+        taskId,
+        swarmId: task.swarm_id,
+        agentId: agent.id,
+        provider: agent.provider,
+        model: agent.model,
+        description: task.description,
+        result: result.output,
+        success: true,
+        retries: attempt,
+        durationMs: Date.now() - taskStart,
+      });
 
       logger.info({ taskId, agentId: agent.id, attempt }, 'task completed');
       return;
@@ -114,18 +118,18 @@ export async function runTask(taskId: string): Promise<void> {
         WHERE id = ?
       `).run(errorType, errorType, agent.id);
 
-        logTrajectory({
-          taskId,
-          swarmId: task.swarm_id,
-          agentId: agent.id,
-          provider: agent.provider,
-          model: agent.model,
-          description: task.description,
-          result: null,
-          success: false,
-          retries: attempt,
-          durationMs: 0,
-        });
+      await learningEngine.recordTrajectory({
+        taskId,
+        swarmId: task.swarm_id,
+        agentId: agent.id,
+        provider: agent.provider,
+        model: agent.model,
+        description: task.description,
+        result: null,
+        success: false,
+        retries: attempt,
+        durationMs: 0,
+      });
 
       logger.warn({ taskId, agentId: agent.id, attempt, errorType }, 'task attempt failed');
 
@@ -139,7 +143,11 @@ export async function runTask(taskId: string): Promise<void> {
   }
 }
 
-function pickAgent(swarmId: string, excludeAgentId: string | null): AgentRow | undefined {
+function pickAgent(
+  swarmId: string,
+  excludeAgentId: string | null,
+  recommendation: { provider: AgentProvider; model: string } | null
+): AgentRow | undefined {
   const db = getDb();
   const now = Math.floor(Date.now() / 1000);
 
@@ -161,6 +169,12 @@ function pickAgent(swarmId: string, excludeAgentId: string | null): AgentRow | u
   );
 
   if (eligible.length === 0) return undefined;
+
+  const recommended = recommendation
+    ? eligible.find((agent) => agent.provider === recommendation.provider && agent.model === recommendation.model)
+    : undefined;
+
+  if (recommended) return recommended;
 
   // Prefer highest health_score
   return eligible.sort((a, b) => b.health_score - a.health_score)[0];
