@@ -72,5 +72,25 @@ function runMigrations(db: Database.Database) {
       reason            TEXT NOT NULL,
       blacklist_count   INTEGER NOT NULL DEFAULT 1
     );
+
+    CREATE TABLE IF NOT EXISTS trajectories (
+      id           TEXT PRIMARY KEY,
+      task_id      TEXT NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
+      swarm_id     TEXT NOT NULL REFERENCES swarms(id) ON DELETE CASCADE,
+      agent_id     TEXT,
+      provider     TEXT NOT NULL,
+      model        TEXT NOT NULL,
+      description  TEXT NOT NULL,
+      result       TEXT,
+      success      INTEGER NOT NULL DEFAULT 0,
+      retries      INTEGER NOT NULL DEFAULT 0,
+      duration_ms  INTEGER NOT NULL DEFAULT 0,
+      embedding    BLOB,
+      archived_at  INTEGER,
+      created_at   INTEGER NOT NULL DEFAULT (unixepoch())
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_trajectories_swarm ON trajectories(swarm_id);
+    CREATE INDEX IF NOT EXISTS idx_trajectories_created ON trajectories(created_at);
   `);
 }

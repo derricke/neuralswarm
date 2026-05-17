@@ -2,6 +2,7 @@ import { randomUUID } from 'crypto';
 import { getDb } from '../lib/db';
 import { spawnAgent } from '../agents/spawner';
 import { logger } from '../lib/logger';
+import { logTrajectory } from '../memory/trajectoryStore';
 import type { AgentConfig, AgentProvider } from '../agents/types';
 
 const MAX_RETRIES = 3;
@@ -72,6 +73,7 @@ export async function runTask(taskId: string): Promise<void> {
         model: agent.model,
       };
 
+        const taskStart = Date.now();
       const result = await spawnAgent(task.description, config);
 
       db.prepare(
@@ -81,6 +83,19 @@ export async function runTask(taskId: string): Promise<void> {
       db.prepare(
         `UPDATE agents SET status = 'idle', consecutive_failures = 0, updated_at = unixepoch() WHERE id = ?`
       ).run(agent.id);
+
+        logTrajectory({
+          taskId,
+          swarmId: task.swarm_id,
+          agentId: agent.id,
+          provider: agent.provider,
+          model: agent.model,
+          description: task.description,
+          result: result.output,
+          success: true,
+          retries: attempt,
+          durationMs: Date.now() - taskStart,
+        });
 
       logger.info({ taskId, agentId: agent.id, attempt }, 'task completed');
       return;
@@ -98,6 +113,19 @@ export async function runTask(taskId: string): Promise<void> {
           updated_at = unixepoch()
         WHERE id = ?
       `).run(errorType, errorType, agent.id);
+
+        logTrajectory({
+          taskId,
+          swarmId: task.swarm_id,
+          agentId: agent.id,
+          provider: agent.provider,
+          model: agent.model,
+          description: task.description,
+          result: null,
+          success: false,
+          retries: attempt,
+          durationMs: 0,
+        });
 
       logger.warn({ taskId, agentId: agent.id, attempt, errorType }, 'task attempt failed');
 
