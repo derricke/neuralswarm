@@ -2,6 +2,7 @@ import express from 'express';
 import { healthRouter } from './routes/health';
 import { swarmsRouter } from './routes/swarms';
 import { tasksRouter } from './routes/tasks';
+import { agentsRouter } from './routes/agents';
 import { logger } from './lib/logger';
 
 export function createApp() {
@@ -17,6 +18,7 @@ export function createApp() {
   app.use('/health', healthRouter);
   app.use('/swarms', swarmsRouter);
   app.use('/tasks', tasksRouter);
+  app.use('/agents', agentsRouter);
 
   return app;
 }
