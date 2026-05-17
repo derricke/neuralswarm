@@ -1,0 +1,65 @@
+import { Router, Request, Response } from 'express';
+import { randomUUID } from 'crypto';
+import { z } from 'zod';
+import { getDb } from '../lib/db';
+import { parseTaskInput } from '../lib/taskParser';
+
+export const tasksRouter = Router();
+
+const SubmitTasksSchema = z.object({
+  swarm_id: z.string().uuid(),
+  input: z.string().min(1),
+});
+
+// POST /tasks — parse raw input and queue tasks against a swarm
+tasksRouter.post('/', (req: Request, res: Response) => {
+  const parsed = SubmitTasksSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: 'invalid_request', details: parsed.error.flatten() });
+    return;
+  }
+
+  const { swarm_id, input } = parsed.data;
+  const db = getDb();
+
+  const swarm = db.prepare('SELECT id FROM swarms WHERE id = ?').get(swarm_id);
+  if (!swarm) {
+    res.status(404).json({ error: 'swarm_not_found' });
+    return;
+  }
+
+  const taskInputs = parseTaskInput(input);
+  if (taskInputs.length === 0) {
+    res.status(422).json({ error: 'no_tasks_parsed' });
+    return;
+  }
+
+  const insert = db.prepare(
+    `INSERT INTO tasks (id, swarm_id, description) VALUES (?, ?, ?)`
+  );
+
+  const insertMany = db.transaction(() => {
+    for (const t of taskInputs) {
+      insert.run(randomUUID(), swarm_id, t.description);
+    }
+  });
+
+  insertMany();
+
+  const tasks = db
+    .prepare('SELECT * FROM tasks WHERE swarm_id = ? ORDER BY created_at DESC LIMIT ?')
+    .all(swarm_id, taskInputs.length);
+
+  res.status(201).json({ parsed: taskInputs.length, tasks });
+});
+
+// GET /tasks/:id
+tasksRouter.get('/:id', (req: Request, res: Response) => {
+  const db = getDb();
+  const task = db.prepare('SELECT * FROM tasks WHERE id = ?').get(req.params.id);
+  if (!task) {
+    res.status(404).json({ error: 'not_found' });
+    return;
+  }
+  res.json(task);
+});
