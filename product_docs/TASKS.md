@@ -145,10 +145,10 @@
   - [x] Graceful degradation (o (exponential backoff, max 3 attempts)
   - [x] User-friendly error messages (no API keys in errors)
 
-- [ ] **Observability**
+- [x] **Observability**
   - [x] Structured logging (Pino + JSON, NO API keys)
   - [x] Prometheus metrics (agent spawns, task completions, latencies, retry_rate, **agents_fired_total, provider_blacklist_events_total**)
-  - [ ] Agent health dashboard (real-time scores, firing events)
+  - [x] Agent health dashboard (real-time scores, firing events)
   - [x] Database size monitoring (alert >500MB)
 
 - [ ] **Data Management**
