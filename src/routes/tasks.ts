@@ -53,15 +53,42 @@ tasksRouter.post('/', (req: Request, res: Response) => {
   res.status(201).json({ parsed: taskInputs.length, tasks });
 });
 
-// GET /tasks/:id
+// GET /tasks/:id — includes full trajectory history
 tasksRouter.get('/:id', (req: Request, res: Response) => {
   const db = getDb();
-  const task = db.prepare('SELECT * FROM tasks WHERE id = ?').get(req.params.id);
+  const task = db.prepare('SELECT * FROM tasks WHERE id = ?').get(req.params.id) as
+    | {
+        id: string;
+        swarm_id: string;
+        agent_id: string | null;
+        description: string;
+        status: string;
+        retries: number;
+        result: string | null;
+        error: string | null;
+        created_at: number;
+        updated_at: number;
+      }
+    | undefined;
+
   if (!task) {
     res.status(404).json({ error: 'not_found' });
     return;
   }
-  res.json(task);
+
+  const trajectories = db
+    .prepare('SELECT * FROM trajectories WHERE task_id = ? ORDER BY created_at ASC')
+    .all(req.params.id);
+
+  const agent = task.agent_id
+    ? db.prepare('SELECT id, swarm_id, provider, model, status, health_score FROM agents WHERE id = ?').get(task.agent_id)
+    : null;
+
+  res.json({
+    ...task,
+    agent,
+    trajectories,
+  });
 });
 
 // GET /tasks?swarm_id=...
