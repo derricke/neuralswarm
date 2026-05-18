@@ -11,7 +11,9 @@ import { metricsRouter } from './routes/metrics';
 import { apiKeysRouter } from './routes/apiKeys';
 import { webhooksRouter } from './routes/webhooks';
 import { batchRouter } from './routes/batch';
+import { diagnosticsRouter } from './routes/diagnostics';
 import { apiKeyAuth } from './middleware/auth';
+import { requestTracing } from './middleware/tracing';
 import { createRateLimiter } from './middleware/rateLimiter';
 
 function sanitizeError(message: string): string {
@@ -31,8 +33,8 @@ export function createApp() {
   app.use(express.json());
   app.use((req, res, next) => {
     res.setHeader('Access-Control-Allow-Origin', '*');
-    res.setHeader('Access-Control-Allow-Methods', 'GET,POST,DELETE,OPTIONS');
-    res.setHeader('Access-Control-Allow-Headers', 'Content-Type,Authorization');
+    res.setHeader('Access-Control-Allow-Methods', 'GET,POST,DELETE,PATCH,OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type,Authorization,X-Correlation-ID');
 
     if (req.method === 'OPTIONS') {
       res.sendStatus(204);
@@ -41,6 +43,9 @@ export function createApp() {
 
     next();
   });
+
+  // Add request tracing (must be early in middleware chain)
+  app.use(requestTracing);
 
   app.use((req, _res, next) => {
     logger.info({ method: req.method, url: req.url }, 'request');
@@ -64,6 +69,7 @@ export function createApp() {
   app.use('/api-keys', apiKeysRouter);
   app.use('/webhooks', webhooksRouter);
   app.use('/batch', batchRouter);
+  app.use('/diagnostics', diagnosticsRouter);
 
   // 404 handler
   app.use((_req: Request, res: Response) => {
