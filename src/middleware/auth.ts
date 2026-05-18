@@ -9,7 +9,7 @@ export interface AuthRequest extends Request {
 
 export function apiKeyAuth(req: AuthRequest, res: Response, next: NextFunction) {
   // Skip auth for public endpoints
-  if (req.path === '/health' || req.path === '/metrics') {
+  if (req.path === '/health' || req.path.startsWith('/metrics')) {
     return next();
   }
 
