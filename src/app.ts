@@ -7,6 +7,7 @@ import { logger } from './lib/logger';
 import { memoriesRouter } from './routes/memories';
 import { learningRouter } from './routes/learning';
 import { uiRouter } from './routes/ui';
+import { metricsRouter } from './routes/metrics';
 
 export function createApp() {
   const app = express();
@@ -37,6 +38,7 @@ export function createApp() {
   app.use('/memories', memoriesRouter);
   app.use('/learning', learningRouter);
   app.use('/ui', uiRouter);
+  app.use('/metrics', metricsRouter);
 
   return app;
 }
