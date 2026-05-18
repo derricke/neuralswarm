@@ -83,7 +83,7 @@ export function createApp() {
     const message = err instanceof Error ? err.message : 'Internal server error';
     const sanitized = sanitizeError(message);
 
-    logger.error({ error: sanitized, originalError: message }, 'unhandled error');
+    logger.error({ error: sanitized }, 'unhandled error');
 
     if (err instanceof SyntaxError && 'body' in err) {
       res.status(400).json({ error: 'invalid_json', message: 'Request body must be valid JSON' });
