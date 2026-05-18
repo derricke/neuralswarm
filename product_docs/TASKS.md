@@ -130,7 +130,7 @@
     - [x] Fallback: pick any idle agent
     - [x] Prefer agents with higher success_rate
 
-  - [ ] **Learning Integration**
+  - [x] **Learning Integration**
     - [x] Agent-type-memory recommends provider/model based on task description
     - [x] Find agent in swarm matching recommendation
     - [x] Update job performance metrics
@@ -142,8 +142,8 @@
 
   ## Milestone 3: Quality + Polish
 - [ ] **Error Handling**
-  - [ ] Graceful degradation (o (exponential backoff, max 3 attempts)
-  - [ ] User-friendly error messages (no API keys in errors)
+  - [x] Graceful degradation (o (exponential backoff, max 3 attempts)
+  - [x] User-friendly error messages (no API keys in errors)
 
 - [ ] **Observability**
   - [ ] Structured logging (Pino + JSON, NO API keys)

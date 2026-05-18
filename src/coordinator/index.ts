@@ -8,6 +8,7 @@ import { getOrCreateAgentTypeProfile, updateAgentTypeProfileAfterTask } from '..
 import type { AgentConfig, AgentProvider } from '../agents/types';
 
 const MAX_RETRIES = 3;
+const RETRY_BACKOFF_MS = [1000, 2000, 4000] as const;
 
 type AgentRow = {
   id: string;
@@ -100,7 +101,7 @@ export async function runTask(taskId: string): Promise<void> {
   if (task.status === 'completed') return;
 
   const learningEngine = getLearningEngine();
-  const recommendation = await learningEngine.recommendAgentProfile(task.swarm_id, task.description);
+  const recommendation = await safeRecommendAgentProfile(learningEngine, task.swarm_id, task.description);
 
   db.prepare(`UPDATE tasks SET status = 'running', updated_at = unixepoch() WHERE id = ?`).run(taskId);
 
@@ -141,7 +142,7 @@ export async function runTask(taskId: string): Promise<void> {
 
     try {
       // Load agent type profile (learned traits)
-      const typeProfile = await getOrCreateAgentTypeProfile(agent.provider, agent.model);
+      const typeProfile = await safeLoadAgentTypeProfile(agent.provider, agent.model);
       const job = agent.job_id ? getJobById(agent.job_id, task.swarm_id) : null;
 
       const config: AgentConfig = {
@@ -167,7 +168,7 @@ export async function runTask(taskId: string): Promise<void> {
       }
 
       // Update agent type profile with success
-      await updateAgentTypeProfileAfterTask(
+      await safeUpdateAgentTypeProfileAfterTask(
         agent.provider,
         agent.model,
         task.description,
@@ -175,7 +176,7 @@ export async function runTask(taskId: string): Promise<void> {
         true
       );
 
-      await learningEngine.recordTrajectory({
+      await safeRecordTrajectory(learningEngine, {
         taskId,
         swarmId: task.swarm_id,
         agentId: agent.id,
@@ -210,7 +211,7 @@ export async function runTask(taskId: string): Promise<void> {
       }
 
       // Update agent type profile with failure
-      await updateAgentTypeProfileAfterTask(
+      await safeUpdateAgentTypeProfileAfterTask(
         agent.provider,
         agent.model,
         task.description,
@@ -218,7 +219,7 @@ export async function runTask(taskId: string): Promise<void> {
         false
       );
 
-      await learningEngine.recordTrajectory({
+      await safeRecordTrajectory(learningEngine, {
         taskId,
         swarmId: task.swarm_id,
         agentId: agent.id,
@@ -239,9 +240,85 @@ export async function runTask(taskId: string): Promise<void> {
           `UPDATE tasks SET status = 'failed', error = ?, retries = ?, updated_at = unixepoch() WHERE id = ?`
         ).run(errorType, attempt, taskId);
         logger.error({ taskId }, 'task exhausted retries');
+      } else {
+        await waitBeforeRetry(attempt);
       }
     }
   }
+}
+
+async function safeRecommendAgentProfile(
+  learningEngine: ReturnType<typeof getLearningEngine>,
+  swarmId: string,
+  description: string
+): Promise<{ provider: AgentProvider; model: string } | null> {
+  try {
+    return await learningEngine.recommendAgentProfile(swarmId, description);
+  } catch (error) {
+    logger.warn({ swarmId, error }, 'agent recommendation failed; falling back to idle-agent routing');
+    return null;
+  }
+}
+
+async function safeLoadAgentTypeProfile(provider: AgentProvider, model: string): Promise<{
+  best_system_prompt: string | null;
+  temperature: number;
+  top_k_tokens: number;
+}> {
+  try {
+    return await getOrCreateAgentTypeProfile(provider, model);
+  } catch (error) {
+    logger.warn({ provider, model, error }, 'agent type profile load failed; using defaults');
+    return {
+      best_system_prompt: null,
+      temperature: 0.7,
+      top_k_tokens: 1024,
+    };
+  }
+}
+
+async function safeUpdateAgentTypeProfileAfterTask(
+  provider: AgentProvider,
+  model: string,
+  description: string,
+  outcome: string,
+  success: boolean
+): Promise<void> {
+  try {
+    await updateAgentTypeProfileAfterTask(provider, model, description, outcome, success);
+  } catch (error) {
+    logger.warn({ provider, model, success, error }, 'agent profile update failed');
+  }
+}
+
+async function safeRecordTrajectory(
+  learningEngine: ReturnType<typeof getLearningEngine>,
+  record: {
+    taskId: string;
+    swarmId: string;
+    agentId: string;
+    provider: AgentProvider;
+    model: string;
+    jobId: string | null;
+    description: string;
+    result: string | null;
+    success: boolean;
+    retries: number;
+    durationMs: number;
+  }
+): Promise<void> {
+  try {
+    await learningEngine.recordTrajectory(record);
+  } catch (error) {
+    logger.warn({ taskId: record.taskId, error }, 'trajectory logging failed');
+  }
+}
+
+async function waitBeforeRetry(attempt: number): Promise<void> {
+  if (process.env.NODE_ENV === 'test') return;
+
+  const delayMs = RETRY_BACKOFF_MS[Math.min(attempt - 1, RETRY_BACKOFF_MS.length - 1)] ?? 1000;
+  await new Promise((resolve) => setTimeout(resolve, delayMs));
 }
 
 function pickAgent(

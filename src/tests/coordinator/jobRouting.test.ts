@@ -5,6 +5,12 @@ import { spawnAgent } from '../../agents/spawner';
 
 const mockRecommendAgentProfile = jest.fn().mockResolvedValue(null);
 const mockRecordTrajectory = jest.fn().mockResolvedValue('trajectory-id');
+const mockGetOrCreateAgentTypeProfile = jest.fn().mockResolvedValue({
+  best_system_prompt: null,
+  temperature: 0.7,
+  top_k_tokens: 1024,
+});
+const mockUpdateAgentTypeProfileAfterTask = jest.fn().mockResolvedValue(undefined);
 
 jest.mock('../../agents/spawner', () => ({
   spawnAgent: jest.fn(),
@@ -15,6 +21,11 @@ jest.mock('../../learning/engine', () => ({
     recommendAgentProfile: mockRecommendAgentProfile,
     recordTrajectory: mockRecordTrajectory,
   }),
+}));
+
+jest.mock('../../agents/typeProfile', () => ({
+  getOrCreateAgentTypeProfile: (...args: unknown[]) => mockGetOrCreateAgentTypeProfile(...args),
+  updateAgentTypeProfileAfterTask: (...args: unknown[]) => mockUpdateAgentTypeProfileAfterTask(...args),
 }));
 
 function insertSwarm() {
@@ -61,6 +72,12 @@ beforeEach(() => {
   jest.clearAllMocks();
   mockRecommendAgentProfile.mockResolvedValue(null);
   mockRecordTrajectory.mockResolvedValue('trajectory-id');
+  mockGetOrCreateAgentTypeProfile.mockResolvedValue({
+    best_system_prompt: null,
+    temperature: 0.7,
+    top_k_tokens: 1024,
+  });
+  mockUpdateAgentTypeProfileAfterTask.mockResolvedValue(undefined);
 });
 
 afterAll(() => {
@@ -289,5 +306,72 @@ describe('Phase 3 auto-pick routing', () => {
     expect(metrics.tasks_assigned).toBe(4);
     expect(metrics.tasks_completed).toBe(1);
     expect(metrics.tasks_failed).toBe(3);
+  });
+
+  it('keeps running when recommendation lookup fails', async () => {
+    const swarmId = insertSwarm();
+    const coderJobId = insertJob(swarmId, 'coder');
+    const agentId = insertAgent(swarmId, coderJobId, 'openai', 'gpt-4o');
+
+    const db = getDb();
+    const taskId = randomUUID();
+    db.prepare(`
+      INSERT INTO tasks (id, swarm_id, description, required_job)
+      VALUES (?, ?, ?, NULL)
+    `).run(taskId, swarmId, 'Task where recommendation fails');
+
+    mockRecommendAgentProfile.mockRejectedValueOnce(new Error('OPENAI_API_KEY missing sk-testsecret1234567890'));
+    (spawnAgent as jest.Mock).mockResolvedValue({
+      provider: 'openai',
+      model: 'gpt-4o',
+      output: 'completed despite recommendation failure',
+      inputTokens: 10,
+      outputTokens: 10,
+      durationMs: 50,
+    });
+
+    await runTask(taskId);
+
+    const task = db.prepare('SELECT status, agent_id FROM tasks WHERE id = ?').get(taskId) as {
+      status: string;
+      agent_id: string;
+    };
+
+    expect(task.status).toBe('completed');
+    expect(task.agent_id).toBe(agentId);
+  });
+
+  it('keeps running when profile updates and trajectory logging fail', async () => {
+    const swarmId = insertSwarm();
+    const coderJobId = insertJob(swarmId, 'coder');
+    insertAgent(swarmId, coderJobId, 'openai', 'gpt-4o');
+
+    const db = getDb();
+    const taskId = randomUUID();
+    db.prepare(`
+      INSERT INTO tasks (id, swarm_id, description, required_job)
+      VALUES (?, ?, ?, NULL)
+    `).run(taskId, swarmId, 'Task with failing learning side effects');
+
+    mockGetOrCreateAgentTypeProfile.mockRejectedValueOnce(new Error('profile store unavailable'));
+    mockUpdateAgentTypeProfileAfterTask.mockRejectedValue(new Error('profile update failed'));
+    mockRecordTrajectory.mockRejectedValue(new Error('trajectory sink offline'));
+
+    (spawnAgent as jest.Mock).mockResolvedValue({
+      provider: 'openai',
+      model: 'gpt-4o',
+      output: 'completed despite side effect failures',
+      inputTokens: 10,
+      outputTokens: 10,
+      durationMs: 50,
+    });
+
+    await runTask(taskId);
+
+    const task = db.prepare('SELECT status FROM tasks WHERE id = ?').get(taskId) as {
+      status: string;
+    };
+
+    expect(task.status).toBe('completed');
   });
 });
