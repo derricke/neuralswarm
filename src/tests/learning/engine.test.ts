@@ -140,4 +140,49 @@ describe('learning engine', () => {
     const row = getDb().prepare('SELECT embedding FROM trajectories WHERE id = ?').get(trajectoryId) as { embedding: Buffer | null };
     expect(row.embedding).toBeTruthy();
   });
+
+  it('improves recommendations as new successful trajectories are learned', async () => {
+    const swarmId = seedSwarm();
+    const oldTaskId = seedTask(swarmId, 'Refactor API handlers');
+    const newTaskId = seedTask(swarmId, 'Refactor API handlers');
+
+    const embedder = new FakeEmbedder();
+    embedder.set('task: Refactor API handlers\nprovider: openai\nmodel: gpt-4o\nsuccess: yes\nresult: cleanup done', [0, 1, 0]);
+    embedder.set('task: Refactor API handlers\nprovider: anthropic\nmodel: claude-3-5-sonnet\nsuccess: yes\nresult: modularized handlers', [1, 0, 0]);
+    embedder.set('Refactor API handlers', [1, 0, 0]);
+
+    const engine = createLearningEngine({ embedder, dimension: 3, maxElements: 32 });
+
+    await engine.recordTrajectory({
+      taskId: oldTaskId,
+      swarmId,
+      agentId: null,
+      provider: 'openai',
+      model: 'gpt-4o',
+      description: 'Refactor API handlers',
+      result: 'cleanup done',
+      success: true,
+      retries: 0,
+      durationMs: 20,
+    });
+
+    const before = await engine.recommendAgentProfile(swarmId, 'Refactor API handlers');
+    expect(before).toMatchObject({ provider: 'openai', model: 'gpt-4o' });
+
+    await engine.recordTrajectory({
+      taskId: newTaskId,
+      swarmId,
+      agentId: null,
+      provider: 'anthropic',
+      model: 'claude-3-5-sonnet',
+      description: 'Refactor API handlers',
+      result: 'modularized handlers',
+      success: true,
+      retries: 0,
+      durationMs: 18,
+    });
+
+    const after = await engine.recommendAgentProfile(swarmId, 'Refactor API handlers');
+    expect(after).toMatchObject({ provider: 'anthropic', model: 'claude-3-5-sonnet' });
+  });
 });

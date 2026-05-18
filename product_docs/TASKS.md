@@ -138,7 +138,7 @@
   - [x] **Tests**
     - [x] Unit tests: auto-pick logic
     - [x] Integration tests: mixed explicit + auto workflows
-    - [ ] Learning tests: verify recommendations improve over time
+    - [x] Learning tests: verify recommendations improve over time
 
   ## Milestone 3: Quality + Polish
 - [ ] **Error Handling**
