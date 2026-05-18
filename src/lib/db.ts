@@ -90,7 +90,18 @@ function runMigrations(db: Database.Database) {
       created_at   INTEGER NOT NULL DEFAULT (unixepoch())
     );
 
+    CREATE TABLE IF NOT EXISTS api_keys (
+      id          TEXT PRIMARY KEY,
+      name        TEXT NOT NULL,
+      key         TEXT NOT NULL UNIQUE,
+      expires_at  TEXT,
+      last_used_at TEXT,
+      revoked_at  TEXT,
+      created_at  TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+
     CREATE INDEX IF NOT EXISTS idx_trajectories_swarm ON trajectories(swarm_id);
     CREATE INDEX IF NOT EXISTS idx_trajectories_created ON trajectories(created_at);
+    CREATE INDEX IF NOT EXISTS idx_api_keys_key ON api_keys(key);
   `);
 }
