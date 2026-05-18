@@ -224,7 +224,13 @@ export async function Dashboard() {
                 </tbody>
               </table>
             ) : (
-              <div className="emptyState">No swarms yet. Create one through the API to populate the dashboard.</div>
+              <div className="emptyState">
+                No swarms yet.{' '}
+                <a href="/swarms/create" style={{ color: 'var(--accent)', textDecoration: 'underline' }}>
+                  Create one
+                </a>
+                .
+              </div>
             )}
           </article>
 
@@ -299,7 +305,13 @@ export async function Dashboard() {
                   </tbody>
                 </table>
               ) : (
-                <div className="emptyState">No tasks submitted yet.</div>
+                <div className="emptyState">
+                  No tasks submitted yet.{' '}
+                  <a href="/tasks/upload" style={{ color: 'var(--accent)', textDecoration: 'underline' }}>
+                    Submit some
+                  </a>
+                  .
+                </div>
               )}
             </article>
           </div>
