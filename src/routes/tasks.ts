@@ -9,7 +9,7 @@ export const tasksRouter = Router();
 const SubmitTasksSchema = z.object({
   swarm_id: z.string().uuid(),
   input: z.string().min(1),
-  required_job: z.string().uuid().optional(),
+  required_job: z.string().min(1).optional(),
 });
 
 // POST /tasks — parse raw input and queue tasks against a swarm
@@ -29,19 +29,38 @@ tasksRouter.post('/', (req: Request, res: Response) => {
     return;
   }
 
+  const taskInputs = parseTaskInput(input);
+  if (taskInputs.length === 0) {
+    res.status(422).json({ error: 'no_tasks_parsed' });
+    return;
+  }
+
   if (required_job) {
     const job = db
-      .prepare('SELECT id FROM swarm_jobs WHERE id = ? AND swarm_id = ?')
-      .get(required_job, swarm_id);
+      .prepare('SELECT id FROM swarm_jobs WHERE swarm_id = ? AND (id = ? OR title = ?)')
+      .get(swarm_id, required_job, required_job) as { id: string } | undefined;
     if (!job) {
       res.status(404).json({ error: 'job_not_found' });
       return;
     }
-  }
 
-  const taskInputs = parseTaskInput(input);
-  if (taskInputs.length === 0) {
-    res.status(422).json({ error: 'no_tasks_parsed' });
+    const resolvedInsert = db.prepare(
+      `INSERT INTO tasks (id, swarm_id, description, required_job) VALUES (?, ?, ?, ?)`
+    );
+
+    const insertResolvedMany = db.transaction(() => {
+      for (const t of taskInputs) {
+        resolvedInsert.run(randomUUID(), swarm_id, t.description, job.id);
+      }
+    });
+
+    insertResolvedMany();
+
+    const tasks = db
+      .prepare('SELECT * FROM tasks WHERE swarm_id = ? ORDER BY created_at DESC LIMIT ?')
+      .all(swarm_id, taskInputs.length);
+
+    res.status(201).json({ parsed: taskInputs.length, tasks });
     return;
   }
 

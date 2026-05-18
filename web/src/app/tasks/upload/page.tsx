@@ -18,6 +18,7 @@ type UploadResponse = {
 
 export default function TaskUploadPage() {
   const [swarmId, setSwarmId] = useState('');
+  const [requiredJob, setRequiredJob] = useState('');
   const [input, setInput] = useState('');
   const [state, setState] = useState<SubmitState>('idle');
   const [message, setMessage] = useState('');
@@ -37,7 +38,11 @@ export default function TaskUploadPage() {
     try {
       const result = await fetchJson<UploadResponse>('/ui/upload', {
         method: 'POST',
-        body: JSON.stringify({ swarm_id: swarmId, input }),
+        body: JSON.stringify({
+          swarm_id: swarmId,
+          input,
+          required_job: requiredJob.trim() || undefined,
+        }),
       });
 
       setMessage(`✓ Successfully parsed and queued ${result.parsed} task(s)`);
@@ -84,6 +89,18 @@ export default function TaskUploadPage() {
                 placeholder="Paste or type a UUID-formatted swarm ID"
                 value={swarmId}
                 onChange={(e) => setSwarmId(e.target.value)}
+                disabled={state === 'loading'}
+              />
+            </div>
+
+            <div className="field">
+              <label htmlFor="requiredJob">Assign to job (optional, title or id)</label>
+              <input
+                id="requiredJob"
+                type="text"
+                placeholder="e.g., coder"
+                value={requiredJob}
+                onChange={(e) => setRequiredJob(e.target.value)}
                 disabled={state === 'loading'}
               />
             </div>

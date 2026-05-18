@@ -24,6 +24,11 @@ type AgentRow = {
   last_error_count: number;
 };
 
+type SwarmRow = {
+  id: string;
+  status: string;
+};
+
 type TaskRow = {
   id: string;
   swarm_id: string;
@@ -44,6 +49,43 @@ type JobRow = {
   model: string;
   system_prompt: string;
 };
+
+type StartSwarmResult = {
+  swarmId: string;
+  hiredAgents: number;
+  queuedTasks: number;
+};
+
+const DEFAULT_PROVIDER: AgentProvider = 'openai';
+const DEFAULT_MODEL = 'gpt-4o';
+
+export async function startSwarm(swarmId: string): Promise<StartSwarmResult> {
+  const db = getDb();
+  const swarm = db.prepare('SELECT id, status FROM swarms WHERE id = ?').get(swarmId) as SwarmRow | undefined;
+
+  if (!swarm) {
+    throw new Error(`Swarm not found: ${swarmId}`);
+  }
+
+  const pendingTasks = db
+    .prepare(`SELECT id, description FROM tasks WHERE swarm_id = ? AND status = 'pending' ORDER BY created_at ASC`)
+    .all(swarmId) as Array<{ id: string; description: string }>;
+
+  const hiredAgents = await hireAgentsForSwarm(swarmId, pendingTasks);
+
+  db.prepare(`UPDATE swarms SET status = 'running', updated_at = unixepoch() WHERE id = ?`).run(swarmId);
+
+  const queuedTasks = pendingTasks.length;
+  void Promise.allSettled(pendingTasks.map((task) => runTask(task.id))).finally(() => {
+    db.prepare(`UPDATE swarms SET status = 'idle', updated_at = unixepoch() WHERE id = ?`).run(swarmId);
+  });
+
+  return {
+    swarmId,
+    hiredAgents,
+    queuedTasks,
+  };
+}
 
 type ProviderBlacklistRow = {
   provider: string;
@@ -273,6 +315,55 @@ function getJobById(jobId: string, swarmId: string): JobRow | null {
     .get(jobId, swarmId) as JobRow | undefined;
 
   return job ?? null;
+}
+
+async function hireAgentsForSwarm(
+  swarmId: string,
+  pendingTasks: Array<{ id: string; description: string }>
+): Promise<number> {
+  const db = getDb();
+  let hired = 0;
+
+  const jobs = db
+    .prepare(`SELECT id, swarm_id, title, provider, model, system_prompt FROM swarm_jobs WHERE swarm_id = ?`)
+    .all(swarmId) as JobRow[];
+
+  if (jobs.length > 0) {
+    for (const job of jobs) {
+      const existing = db
+        .prepare(`SELECT id FROM agents WHERE swarm_id = ? AND job_id = ? LIMIT 1`)
+        .get(swarmId, job.id) as { id: string } | undefined;
+
+      if (!existing) {
+        registerAgent(swarmId, job.provider, job.model, job.id);
+        hired++;
+      }
+    }
+
+    return hired;
+  }
+
+  const existingAgents = db
+    .prepare(`SELECT id FROM agents WHERE swarm_id = ? LIMIT 1`)
+    .all(swarmId) as Array<{ id: string }>;
+
+  if (existingAgents.length > 0) {
+    return hired;
+  }
+
+  const firstPending = pendingTasks[0];
+  if (!firstPending) {
+    return hired;
+  }
+
+  const recommendation = await getLearningEngine().recommendAgentProfile(swarmId, firstPending.description);
+  const provider = recommendation?.provider ?? DEFAULT_PROVIDER;
+  const model = recommendation?.model ?? DEFAULT_MODEL;
+
+  registerAgent(swarmId, provider, model);
+  hired++;
+
+  return hired;
 }
 
 function isFired(agent: AgentRow): boolean {

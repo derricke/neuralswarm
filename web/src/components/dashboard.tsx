@@ -126,6 +126,12 @@ export async function Dashboard() {
                 <div className="metricHint">{swarmAgents.length} agents attached to the latest swarm</div>
               </article>
             </div>
+
+            <div className="chipRow" style={{ marginTop: '1rem' }}>
+              <a href="/swarms/create" className="chip">Create swarm</a>
+              <a href="/swarms/control" className="chip">Control swarm</a>
+              <a href="/tasks/upload" className="chip">Upload tasks</a>
+            </div>
           </div>
 
           <div className="sideStack">
