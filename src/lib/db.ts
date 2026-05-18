@@ -18,7 +18,8 @@ export function isDatabaseUnavailableError(error: unknown): error is DatabaseUna
 export function getDb(): Database.Database {
   if (_db) return _db;
 
-  const dbPath = process.env.DATABASE_URL ?? path.join(process.cwd(), 'data', 'neuralswarm.db');
+  const configuredPath = process.env.DATABASE_URL?.trim();
+  const dbPath = configuredPath ? configuredPath : path.join(process.cwd(), 'data', 'neuralswarm.db');
   try {
     _db = new Database(dbPath);
   } catch (error) {
@@ -50,6 +51,10 @@ export function resetDb(): void {
     _db.close();
     _db = null;
   }
+}
+
+export function initDb(): void {
+  getDb();
 }
 
 function runMigrations(db: Database.Database) {

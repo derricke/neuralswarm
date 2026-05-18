@@ -1,7 +1,7 @@
 'use client';
 
-import { useState } from 'react';
-import { fetchJson } from '@/lib/api';
+import { useEffect, useState } from 'react';
+import { fetchJson, getApiAuthKey, setApiAuthKey } from '@/lib/api';
 
 type SubmitState = 'idle' | 'loading' | 'success' | 'error';
 
@@ -16,9 +16,14 @@ type SwarmResponse = {
 
 export default function SwarmCreatePage() {
   const [name, setName] = useState('');
+  const [apiKey, setApiKey] = useState('');
   const [state, setState] = useState<SubmitState>('idle');
   const [message, setMessage] = useState('');
   const [createdId, setCreatedId] = useState<string>('');
+
+  useEffect(() => {
+    setApiKey(getApiAuthKey());
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -33,6 +38,7 @@ export default function SwarmCreatePage() {
     setMessage('');
 
     try {
+      setApiAuthKey(apiKey);
       const result = await fetchJson<SwarmResponse>('/swarms', {
         method: 'POST',
         body: JSON.stringify({ name, config: {} }),
@@ -75,6 +81,20 @@ export default function SwarmCreatePage() {
           </div>
 
           <form onSubmit={handleSubmit} className="stack">
+            <div className="field">
+              <label htmlFor="apiKey">API key</label>
+              <input
+                id="apiKey"
+                type="password"
+                placeholder="Paste API key used for backend auth"
+                value={apiKey}
+                onChange={(e) => setApiKey(e.target.value)}
+                disabled={state === 'loading'}
+                autoComplete="off"
+              />
+              <div className="helper">Saved locally in this browser and sent as Bearer token.</div>
+            </div>
+
             <div className="field">
               <label htmlFor="name">Swarm name *</label>
               <input
