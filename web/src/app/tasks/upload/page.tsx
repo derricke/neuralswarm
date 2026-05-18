@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { fetchJson } from '@/lib/api';
 
 type SubmitState = 'idle' | 'loading' | 'success' | 'error';
@@ -16,12 +16,38 @@ type UploadResponse = {
   }>;
 };
 
+type SwarmOption = {
+  id: string;
+  name: string;
+};
+
 export default function TaskUploadPage() {
   const [swarmId, setSwarmId] = useState('');
+  const [swarms, setSwarms] = useState<SwarmOption[]>([]);
   const [requiredJob, setRequiredJob] = useState('');
   const [input, setInput] = useState('');
   const [state, setState] = useState<SubmitState>('idle');
   const [message, setMessage] = useState('');
+
+  useEffect(() => {
+    let mounted = true;
+
+    fetchJson<SwarmOption[]>('/swarms')
+      .then((rows) => {
+        if (mounted) {
+          setSwarms(rows);
+        }
+      })
+      .catch(() => {
+        if (mounted) {
+          setSwarms([]);
+        }
+      });
+
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -86,11 +112,19 @@ export default function TaskUploadPage() {
               <input
                 id="swarmId"
                 type="text"
-                placeholder="Paste or type a UUID-formatted swarm ID"
+                list="swarm-options"
+                placeholder="Search by swarm name or paste UUID"
                 value={swarmId}
                 onChange={(e) => setSwarmId(e.target.value)}
                 disabled={state === 'loading'}
               />
+              <datalist id="swarm-options">
+                {swarms.map((swarm) => (
+                  <option key={swarm.id} value={swarm.id}>
+                    {swarm.name}
+                  </option>
+                ))}
+              </datalist>
             </div>
 
             <div className="field">

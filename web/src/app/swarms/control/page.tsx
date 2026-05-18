@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { fetchJson } from '@/lib/api';
 
 type JobRow = {
@@ -24,10 +24,16 @@ type UploadResponse = {
   parsed: number;
 };
 
+type SwarmOption = {
+  id: string;
+  name: string;
+};
+
 const PROVIDERS = ['openai', 'anthropic', 'google', 'ollama'] as const;
 
 export default function SwarmControlPage() {
   const [swarmId, setSwarmId] = useState('');
+  const [swarms, setSwarms] = useState<SwarmOption[]>([]);
 
   const [jobs, setJobs] = useState<JobRow[]>([]);
   const [jobsMessage, setJobsMessage] = useState('');
@@ -46,6 +52,26 @@ export default function SwarmControlPage() {
   const [busy, setBusy] = useState(false);
 
   const canAct = useMemo(() => swarmId.trim().length > 0, [swarmId]);
+
+  useEffect(() => {
+    let mounted = true;
+
+    fetchJson<SwarmOption[]>('/swarms')
+      .then((rows) => {
+        if (mounted) {
+          setSwarms(rows);
+        }
+      })
+      .catch(() => {
+        if (mounted) {
+          setSwarms([]);
+        }
+      });
+
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
   async function loadJobs() {
     if (!canAct) {
@@ -184,11 +210,19 @@ export default function SwarmControlPage() {
             <label htmlFor="swarm-id">Swarm ID</label>
             <input
               id="swarm-id"
+              list="swarm-options"
               value={swarmId}
               onChange={(e) => setSwarmId(e.target.value)}
-              placeholder="UUID swarm id"
+              placeholder="Search by name or paste UUID"
               disabled={busy}
             />
+            <datalist id="swarm-options">
+              {swarms.map((swarm) => (
+                <option key={swarm.id} value={swarm.id}>
+                  {swarm.name}
+                </option>
+              ))}
+            </datalist>
           </div>
           <div className="actions" style={{ marginTop: '1rem' }}>
             <button type="button" className="button" onClick={loadJobs} disabled={busy || !canAct}>
