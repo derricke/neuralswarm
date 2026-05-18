@@ -30,8 +30,6 @@ type SwarmOption = {
   name: string;
 };
 
-const PROVIDERS = ['openai', 'anthropic', 'google', 'ollama'] as const;
-
 export default function SwarmControlPage() {
   const searchParams = useSearchParams();
   const [swarmId, setSwarmId] = useState('');
@@ -39,12 +37,6 @@ export default function SwarmControlPage() {
 
   const [jobs, setJobs] = useState<JobRow[]>([]);
   const [jobsMessage, setJobsMessage] = useState('');
-
-  const [title, setTitle] = useState('coder');
-  const [description, setDescription] = useState('');
-  const [provider, setProvider] = useState<(typeof PROVIDERS)[number]>('openai');
-  const [model, setModel] = useState('gpt-4o');
-  const [systemPrompt, setSystemPrompt] = useState('You are a coding specialist.');
 
   const [taskInput, setTaskInput] = useState('');
   const [requiredJob, setRequiredJob] = useState('');
@@ -97,43 +89,6 @@ export default function SwarmControlPage() {
       setJobsMessage(`Loaded ${result.jobs.length} job(s)`);
     } catch (err) {
       setJobsMessage(err instanceof Error ? err.message : 'Failed to load jobs');
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function createJob(e: React.FormEvent) {
-    e.preventDefault();
-
-    if (!canAct) {
-      setJobsMessage('Enter swarm ID first');
-      return;
-    }
-
-    if (!title.trim() || !model.trim() || !systemPrompt.trim()) {
-      setJobsMessage('Title, model, and system prompt are required');
-      return;
-    }
-
-    setBusy(true);
-    setJobsMessage('');
-
-    try {
-      await fetchJson<JobRow>(`/swarms/${swarmId}/jobs`, {
-        method: 'POST',
-        body: JSON.stringify({
-          title,
-          description,
-          provider,
-          model,
-          system_prompt: systemPrompt,
-        }),
-      });
-
-      setJobsMessage(`Created job "${title}"`);
-      await loadJobs();
-    } catch (err) {
-      setJobsMessage(err instanceof Error ? err.message : 'Failed to create job');
     } finally {
       setBusy(false);
     }
@@ -240,6 +195,12 @@ export default function SwarmControlPage() {
             <button type="button" className="button buttonPrimary" onClick={startSwarm} disabled={busy || !canAct}>
               Start swarm
             </button>
+            <a
+              className="button"
+              href={canAct ? `/swarms/manage-jobs?swarmId=${encodeURIComponent(swarmId)}` : '/swarms/manage-jobs'}
+            >
+              Manage Jobs
+            </a>
           </div>
           {jobsMessage ? <div className="notice" style={{ marginTop: '1rem' }}>{jobsMessage}</div> : null}
           {startMessage ? <div className="notice" style={{ marginTop: '1rem' }}>{startMessage}</div> : null}
@@ -247,64 +208,35 @@ export default function SwarmControlPage() {
 
         <article className="formCard" style={{ marginTop: '1rem' }}>
           <div className="sectionHeader">
-            <h2>Create optional job</h2>
-            <span className="tag">optional</span>
+            <h2>Current jobs</h2>
+            <span className="tag">overview</span>
           </div>
-          <form onSubmit={createJob} className="stack">
-            <div className="field">
-              <label htmlFor="job-title">Role title</label>
-              <input id="job-title" value={title} onChange={(e) => setTitle(e.target.value)} disabled={busy} />
-            </div>
-            <div className="field">
-              <label htmlFor="job-description">Description</label>
-              <input id="job-description" value={description} onChange={(e) => setDescription(e.target.value)} disabled={busy} />
-            </div>
-            <div className="field">
-              <label htmlFor="job-provider">Provider</label>
-              <select id="job-provider" value={provider} onChange={(e) => setProvider(e.target.value as (typeof PROVIDERS)[number])} disabled={busy}>
-                {PROVIDERS.map((p) => (
-                  <option key={p} value={p}>{p}</option>
-                ))}
-              </select>
-            </div>
-            <div className="field">
-              <label htmlFor="job-model">Model</label>
-              <input id="job-model" value={model} onChange={(e) => setModel(e.target.value)} disabled={busy} />
-            </div>
-            <div className="field">
-              <label htmlFor="job-prompt">System prompt</label>
-              <textarea id="job-prompt" value={systemPrompt} onChange={(e) => setSystemPrompt(e.target.value)} disabled={busy} />
-            </div>
-            <div className="actions">
-              <button type="submit" className="button buttonPrimary" disabled={busy || !canAct}>Create job</button>
-            </div>
-          </form>
-
           {jobs.length > 0 ? (
-            <div style={{ marginTop: '1rem' }}>
-              <h3>Current jobs</h3>
-              <table className="table">
-                <thead>
-                  <tr>
-                    <th>Title</th>
-                    <th>Provider</th>
-                    <th>Model</th>
-                    <th>Agents</th>
+            <table className="table">
+              <thead>
+                <tr>
+                  <th>Title</th>
+                  <th>Provider</th>
+                  <th>Model</th>
+                  <th>Agents</th>
+                </tr>
+              </thead>
+              <tbody>
+                {jobs.map((job) => (
+                  <tr key={job.id}>
+                    <td>{job.title}</td>
+                    <td>{job.provider}</td>
+                    <td>{job.model}</td>
+                    <td>{job.agents_count ?? 0}</td>
                   </tr>
-                </thead>
-                <tbody>
-                  {jobs.map((job) => (
-                    <tr key={job.id}>
-                      <td>{job.title}</td>
-                      <td>{job.provider}</td>
-                      <td>{job.model}</td>
-                      <td>{job.agents_count ?? 0}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+                ))}
+              </tbody>
+            </table>
+          ) : (
+            <div className="emptyState">
+              No jobs yet. Use <a href={canAct ? `/swarms/manage-jobs?swarmId=${encodeURIComponent(swarmId)}` : '/swarms/manage-jobs'} style={{ color: 'var(--accent)', textDecoration: 'underline' }}>Manage Jobs</a> to create or add jobs.
             </div>
-          ) : null}
+          )}
         </article>
 
         <article className="formCard">
@@ -317,11 +249,19 @@ export default function SwarmControlPage() {
               <label htmlFor="required-job">Assign to job (optional, title or id)</label>
               <input
                 id="required-job"
+                list="job-options"
                 value={requiredJob}
                 onChange={(e) => setRequiredJob(e.target.value)}
                 placeholder="coder"
                 disabled={busy}
               />
+              <datalist id="job-options">
+                {jobs.map((job) => (
+                  <option key={job.id} value={job.title}>
+                    {job.provider}/{job.model}
+                  </option>
+                ))}
+              </datalist>
             </div>
             <div className="field">
               <label htmlFor="task-input">Task input</label>
