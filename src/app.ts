@@ -1,4 +1,4 @@
-import express from 'express';
+import express, { Request, Response, NextFunction } from 'express';
 import { healthRouter } from './routes/health';
 import { swarmsRouter } from './routes/swarms';
 import { tasksRouter } from './routes/tasks';
@@ -8,6 +8,17 @@ import { memoriesRouter } from './routes/memories';
 import { learningRouter } from './routes/learning';
 import { uiRouter } from './routes/ui';
 import { metricsRouter } from './routes/metrics';
+
+function sanitizeError(message: string): string {
+  // Remove API keys and sensitive patterns from error messages
+  return message
+    .replace(/key[-_]?[a-zA-Z0-9]{20,}/gi, '[redacted]')
+    .replace(/sk[-_][a-zA-Z0-9]{20,}/gi, '[redacted]')
+    .replace(/ANTHROPIC_API_KEY/gi, '[redacted]')
+    .replace(/OPENAI_API_KEY/gi, '[redacted]')
+    .replace(/GOOGLE_API_KEY/gi, '[redacted]')
+    .replace(/OLLAMA_HOST/gi, '[redacted]');
+}
 
 export function createApp() {
   const app = express();
@@ -39,6 +50,29 @@ export function createApp() {
   app.use('/learning', learningRouter);
   app.use('/ui', uiRouter);
   app.use('/metrics', metricsRouter);
+
+  // 404 handler
+  app.use((_req: Request, res: Response) => {
+    res.status(404).json({ error: 'not_found', message: 'Endpoint does not exist' });
+  });
+
+  // Global error handler
+  app.use((err: unknown, _req: Request, res: Response, _next: NextFunction) => {
+    const message = err instanceof Error ? err.message : 'Internal server error';
+    const sanitized = sanitizeError(message);
+
+    logger.error({ error: sanitized, originalError: message }, 'unhandled error');
+
+    if (err instanceof SyntaxError && 'body' in err) {
+      res.status(400).json({ error: 'invalid_json', message: 'Request body must be valid JSON' });
+      return;
+    }
+
+    res.status(500).json({
+      error: 'internal_error',
+      message: sanitized || 'An unexpected error occurred. Please try again later.',
+    });
+  });
 
   return app;
 }
