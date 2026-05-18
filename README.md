@@ -67,7 +67,7 @@ npm run dev
 In a separate terminal:
 
 ```bash
-PORT=3001 NEXT_PUBLIC_API_BASE_URL=http://localhost:3000 npm --prefix web run dev
+npm --prefix web run dev
 # Dashboard at http://localhost:3001
 ```
 

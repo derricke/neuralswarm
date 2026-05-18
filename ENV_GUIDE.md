@@ -56,7 +56,14 @@ At least one LLM provider API key must be configured:
 - Default: `http://localhost:3000`
 - Type: string (full URL)
 - Example: `https://api.myapp.com` (for production deployment)
-- Note: Must be set before building the web app for production
+- Note: Set this in the root `.env` file; the frontend reads it from there
+
+### `NEXT_PUBLIC_API_KEY`
+- API key used by the frontend to call protected backend endpoints
+- Default: empty (protected endpoints will return unauthorized)
+- Type: string
+- Example: `your-generated-api-key`
+- Note: This value is exposed to the browser because it is `NEXT_PUBLIC_*`; use only for local/dev setups
 
 ## Setup Examples
 
@@ -75,7 +82,7 @@ Then run:
 ```bash
 npm run dev
 # In another terminal:
-PORT=3001 npm --prefix web run dev
+npm --prefix web run dev
 ```
 
 ### Local Development (with Ollama)
