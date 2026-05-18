@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { fetchJson } from '@/lib/api';
+import { type JobTemplate, loadJobTemplates, templateKey } from '@/lib/jobTemplates';
 
 type SwarmOption = {
   id: string;
@@ -20,20 +21,7 @@ type JobRow = {
   agents_count?: number;
 };
 
-type JobTemplate = {
-  title: string;
-  description: string;
-  provider: Provider;
-  model: string;
-  system_prompt: string;
-};
-
 type SubmitState = 'idle' | 'loading' | 'success' | 'error';
-
-type Provider = 'openai' | 'anthropic' | 'google' | 'ollama';
-
-const PROVIDERS: Provider[] = ['openai', 'anthropic', 'google', 'ollama'];
-const TEMPLATES_STORAGE_KEY = 'neuralswarm_job_templates';
 
 export default function ManageJobsPage() {
   const searchParams = useSearchParams();
@@ -41,12 +29,6 @@ export default function ManageJobsPage() {
   const [swarmId, setSwarmId] = useState('');
   const [swarms, setSwarms] = useState<SwarmOption[]>([]);
   const [jobs, setJobs] = useState<JobRow[]>([]);
-
-  const [title, setTitle] = useState('coder');
-  const [description, setDescription] = useState('');
-  const [provider, setProvider] = useState<Provider>('openai');
-  const [model, setModel] = useState('gpt-4o');
-  const [systemPrompt, setSystemPrompt] = useState('You are a coding specialist.');
 
   const [templates, setTemplates] = useState<JobTemplate[]>([]);
   const [selectedTemplateKey, setSelectedTemplateKey] = useState('');
@@ -70,23 +52,7 @@ export default function ManageJobsPage() {
   }, []);
 
   useEffect(() => {
-    if (typeof window === 'undefined') {
-      return;
-    }
-
-    const raw = window.localStorage.getItem(TEMPLATES_STORAGE_KEY);
-    if (!raw) {
-      return;
-    }
-
-    try {
-      const parsed = JSON.parse(raw) as JobTemplate[];
-      if (Array.isArray(parsed)) {
-        setTemplates(parsed);
-      }
-    } catch {
-      setTemplates([]);
-    }
+    setTemplates(loadJobTemplates());
   }, []);
 
   useEffect(() => {
@@ -100,25 +66,6 @@ export default function ManageJobsPage() {
       .catch(() => setJobs([]));
   }, [canAct, swarmId]);
 
-  function persistTemplates(nextTemplates: JobTemplate[]) {
-    setTemplates(nextTemplates);
-    if (typeof window !== 'undefined') {
-      window.localStorage.setItem(TEMPLATES_STORAGE_KEY, JSON.stringify(nextTemplates));
-    }
-  }
-
-  function addTemplate(template: JobTemplate) {
-    const deduped = templates.filter(
-      (item) =>
-        !(
-          item.title.toLowerCase() === template.title.toLowerCase() &&
-          item.provider === template.provider &&
-          item.model.toLowerCase() === template.model.toLowerCase()
-        )
-    );
-    persistTemplates([template, ...deduped].slice(0, 30));
-  }
-
   async function refreshJobs() {
     if (!canAct) {
       return;
@@ -126,48 +73,6 @@ export default function ManageJobsPage() {
 
     const result = await fetchJson<{ jobs: JobRow[] }>(`/swarms/${swarmId}/jobs`);
     setJobs(result.jobs);
-  }
-
-  async function createJob(e: React.FormEvent) {
-    e.preventDefault();
-
-    if (!canAct) {
-      setMessage('Select a swarm first');
-      setState('error');
-      return;
-    }
-
-    if (!title.trim() || !model.trim() || !systemPrompt.trim()) {
-      setMessage('Title, model, and system prompt are required');
-      setState('error');
-      return;
-    }
-
-    setState('loading');
-    setMessage('');
-
-    try {
-      const payload: JobTemplate = {
-        title: title.trim(),
-        description: description.trim(),
-        provider,
-        model: model.trim(),
-        system_prompt: systemPrompt.trim(),
-      };
-
-      await fetchJson<JobRow>(`/swarms/${swarmId}/jobs`, {
-        method: 'POST',
-        body: JSON.stringify(payload),
-      });
-
-      addTemplate(payload);
-      await refreshJobs();
-      setMessage(`Added job "${payload.title}" to swarm`);
-      setState('success');
-    } catch (err) {
-      setMessage(err instanceof Error ? err.message : 'Failed to create job');
-      setState('error');
-    }
   }
 
   async function addFromTemplate() {
@@ -202,10 +107,6 @@ export default function ManageJobsPage() {
     }
   }
 
-  function templateKey(template: JobTemplate): string {
-    return `${template.title}::${template.provider}::${template.model}`;
-  }
-
   return (
     <main className="shell">
       <div className="container">
@@ -214,7 +115,7 @@ export default function ManageJobsPage() {
             <span className="kicker">Job management</span>
             <h1 className="heroTitle">Manage Jobs</h1>
             <p className="heroCopy">
-              Create new jobs for a swarm or add them from your previously created job templates.
+              Choose from global jobs and add them to this swarm.
             </p>
           </div>
         </section>
@@ -246,11 +147,11 @@ export default function ManageJobsPage() {
 
         <article className="formCard" style={{ marginTop: '1rem' }}>
           <div className="sectionHeader">
-            <h2>Add from previous jobs</h2>
-            <span className="tag">templates</span>
+            <h2>Add from global jobs</h2>
+            <span className="tag">catalog</span>
           </div>
           <div className="field">
-            <label htmlFor="saved-template">Saved job template</label>
+            <label htmlFor="saved-template">Global job</label>
             <select
               id="saved-template"
               value={selectedTemplateKey}
@@ -267,48 +168,15 @@ export default function ManageJobsPage() {
           </div>
           <div className="actions">
             <button type="button" className="button buttonPrimary" onClick={addFromTemplate} disabled={state === 'loading' || !canAct || !selectedTemplateKey}>
-              Add job to swarm
+              Assign job to swarm
             </button>
+            <a className="button" href={canAct ? `/jobs/create?swarmId=${encodeURIComponent(swarmId)}` : '/jobs/create'}>
+              Create Job
+            </a>
+            <a className="button" href={canAct ? `/swarms/control?swarmId=${encodeURIComponent(swarmId)}` : '/swarms/control'}>
+              Back to swarm control
+            </a>
           </div>
-        </article>
-
-        <article className="formCard" style={{ marginTop: '1rem' }}>
-          <div className="sectionHeader">
-            <h2>Create new job</h2>
-            <span className="tag">form</span>
-          </div>
-          <form onSubmit={createJob} className="stack">
-            <div className="field">
-              <label htmlFor="job-title">Role title</label>
-              <input id="job-title" value={title} onChange={(e) => setTitle(e.target.value)} disabled={state === 'loading'} />
-            </div>
-            <div className="field">
-              <label htmlFor="job-description">Description</label>
-              <input id="job-description" value={description} onChange={(e) => setDescription(e.target.value)} disabled={state === 'loading'} />
-            </div>
-            <div className="field">
-              <label htmlFor="job-provider">Provider</label>
-              <select id="job-provider" value={provider} onChange={(e) => setProvider(e.target.value as Provider)} disabled={state === 'loading'}>
-                {PROVIDERS.map((p) => (
-                  <option key={p} value={p}>{p}</option>
-                ))}
-              </select>
-            </div>
-            <div className="field">
-              <label htmlFor="job-model">Model</label>
-              <input id="job-model" value={model} onChange={(e) => setModel(e.target.value)} disabled={state === 'loading'} />
-            </div>
-            <div className="field">
-              <label htmlFor="job-prompt">System prompt</label>
-              <textarea id="job-prompt" value={systemPrompt} onChange={(e) => setSystemPrompt(e.target.value)} disabled={state === 'loading'} />
-            </div>
-            <div className="actions">
-              <button type="submit" className="button buttonPrimary" disabled={state === 'loading' || !canAct}>Create job</button>
-              <a className="button" href={canAct ? `/swarms/control?swarmId=${encodeURIComponent(swarmId)}` : '/swarms/control'}>
-                Back to swarm control
-              </a>
-            </div>
-          </form>
           {message ? <div className={`notice ${state === 'error' ? 'error' : ''}`}>{message}</div> : null}
         </article>
 

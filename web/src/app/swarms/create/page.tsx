@@ -114,7 +114,7 @@ export default function SwarmCreatePage() {
 
         <div className="footer">
           Once created, register agents with <code>POST /agents</code> and submit tasks to{' '}
-          <code>POST /ui/upload</code>, or use the <a href="/swarms/control" style={{ color: 'var(--accent)', textDecoration: 'underline' }}>swarm control page</a> to create jobs, queue tasks, and start execution.
+          <code>POST /ui/upload</code>, or use the <a href="/jobs/create" style={{ color: 'var(--accent)', textDecoration: 'underline' }}>Create Job</a> page and <a href="/swarms/control" style={{ color: 'var(--accent)', textDecoration: 'underline' }}>swarm control page</a> to assign jobs, queue tasks, and start execution.
         </div>
       </div>
     </main>

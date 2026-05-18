@@ -129,6 +129,7 @@ export async function Dashboard() {
 
             <div className="chipRow" style={{ marginTop: '1rem' }}>
               <a href="/swarms/create" className="chip">Create swarm</a>
+              <a href="/jobs/create" className="chip">Create job</a>
               <a href="/swarms/control" className="chip">Control swarm</a>
               <a href="/tasks/upload" className="chip">Add Tasks</a>
             </div>

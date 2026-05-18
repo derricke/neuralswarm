@@ -159,128 +159,136 @@ export default function SwarmControlPage() {
             <span className="kicker">Swarm control</span>
             <h1 className="heroTitle">Configure jobs, submit tasks, and start a swarm</h1>
             <p className="heroCopy">
-              Jobs are optional. If you create jobs, the coordinator hires agents to fill them. If you skip jobs,
+              Jobs are optional. Create jobs in the global catalog, then assign them to each swarm. If you skip jobs,
               the coordinator auto-picks agents on the backend when starting the swarm.
             </p>
           </div>
         </section>
 
-        <article className="formCard" style={{ marginTop: '1rem' }}>
-          <div className="sectionHeader">
-            <h2>Swarm selection</h2>
-            <span className="tag">required</span>
-          </div>
-          <div className="field">
-            <label htmlFor="swarm-id">Swarm ID</label>
-            <input
-              id="swarm-id"
-              list="swarm-options"
-              value={swarmId}
-              onChange={(e) => setSwarmId(e.target.value)}
-              placeholder="Search by name or paste UUID"
-              disabled={busy}
-            />
-            <datalist id="swarm-options">
-              {swarms.map((swarm) => (
-                <option key={swarm.id} value={swarm.id}>
-                  {swarm.name}
-                </option>
-              ))}
-            </datalist>
-          </div>
-          <div className="actions" style={{ marginTop: '1rem' }}>
-            <button type="button" className="button" onClick={loadJobs} disabled={busy || !canAct}>
-              Load jobs
-            </button>
-            <button type="button" className="button buttonPrimary" onClick={startSwarm} disabled={busy || !canAct}>
-              Start swarm
-            </button>
-            <a
-              className="button"
-              href={canAct ? `/swarms/manage-jobs?swarmId=${encodeURIComponent(swarmId)}` : '/swarms/manage-jobs'}
-            >
-              Manage Jobs
-            </a>
-          </div>
-          {jobsMessage ? <div className="notice" style={{ marginTop: '1rem' }}>{jobsMessage}</div> : null}
-          {startMessage ? <div className="notice" style={{ marginTop: '1rem' }}>{startMessage}</div> : null}
-        </article>
-
-        <article className="formCard" style={{ marginTop: '1rem' }}>
-          <div className="sectionHeader">
-            <h2>Current jobs</h2>
-            <span className="tag">overview</span>
-          </div>
-          {jobs.length > 0 ? (
-            <table className="table">
-              <thead>
-                <tr>
-                  <th>Title</th>
-                  <th>Provider</th>
-                  <th>Model</th>
-                  <th>Agents</th>
-                </tr>
-              </thead>
-              <tbody>
-                {jobs.map((job) => (
-                  <tr key={job.id}>
-                    <td>{job.title}</td>
-                    <td>{job.provider}</td>
-                    <td>{job.model}</td>
-                    <td>{job.agents_count ?? 0}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          ) : (
-            <div className="emptyState">
-              No jobs yet. Use <a href={canAct ? `/swarms/manage-jobs?swarmId=${encodeURIComponent(swarmId)}` : '/swarms/manage-jobs'} style={{ color: 'var(--accent)', textDecoration: 'underline' }}>Manage Jobs</a> to create or add jobs.
+        <div className="stack" style={{ marginTop: '1rem' }}>
+          <article className="formCard">
+            <div className="sectionHeader">
+              <h2>Swarm selection</h2>
+              <span className="tag">required</span>
             </div>
-          )}
-        </article>
-
-        <article className="formCard">
-          <div className="sectionHeader">
-            <h2>Submit tasks</h2>
-            <span className="tag">batch</span>
-          </div>
-          <form onSubmit={submitTasks} className="stack">
             <div className="field">
-              <label htmlFor="required-job">Assign to job (optional, title or id)</label>
+              <label htmlFor="swarm-id">Swarm ID</label>
               <input
-                id="required-job"
-                list="job-options"
-                value={requiredJob}
-                onChange={(e) => setRequiredJob(e.target.value)}
-                placeholder="coder"
+                id="swarm-id"
+                list="swarm-options"
+                value={swarmId}
+                onChange={(e) => setSwarmId(e.target.value)}
+                placeholder="Search by name or paste UUID"
                 disabled={busy}
               />
-              <datalist id="job-options">
-                {jobs.map((job) => (
-                  <option key={job.id} value={job.title}>
-                    {job.provider}/{job.model}
+              <datalist id="swarm-options">
+                {swarms.map((swarm) => (
+                  <option key={swarm.id} value={swarm.id}>
+                    {swarm.name}
                   </option>
                 ))}
               </datalist>
             </div>
-            <div className="field">
-              <label htmlFor="task-input">Task input</label>
-              <textarea
-                id="task-input"
-                value={taskInput}
-                onChange={(e) => setTaskInput(e.target.value)}
-                placeholder={'- [ ] Implement login\n- [ ] Review pull request'}
-                disabled={busy}
-              />
-            </div>
-            <div className="actions">
-              <button type="submit" className="button buttonPrimary" disabled={busy || !canAct || !taskInput.trim()}>
-                Queue tasks
+            <div className="actions" style={{ marginTop: '1rem' }}>
+              <button type="button" className="button" onClick={loadJobs} disabled={busy || !canAct}>
+                Load jobs
               </button>
+              <button type="button" className="button buttonPrimary" onClick={startSwarm} disabled={busy || !canAct}>
+                Start swarm
+              </button>
+              <a
+                className="button"
+                href={canAct ? `/jobs/create?swarmId=${encodeURIComponent(swarmId)}` : '/jobs/create'}
+              >
+                Create Job
+              </a>
+              <a
+                className="button"
+                href={canAct ? `/swarms/manage-jobs?swarmId=${encodeURIComponent(swarmId)}` : '/swarms/manage-jobs'}
+              >
+                Assign Jobs
+              </a>
             </div>
-          </form>
-          {taskMessage ? <div className="notice" style={{ marginTop: '1rem' }}>{taskMessage}</div> : null}
-        </article>
+            {jobsMessage ? <div className="notice" style={{ marginTop: '1rem' }}>{jobsMessage}</div> : null}
+            {startMessage ? <div className="notice" style={{ marginTop: '1rem' }}>{startMessage}</div> : null}
+          </article>
+
+          <article className="formCard">
+            <div className="sectionHeader">
+              <h2>Current jobs</h2>
+              <span className="tag">overview</span>
+            </div>
+            {jobs.length > 0 ? (
+              <table className="table">
+                <thead>
+                  <tr>
+                    <th>Title</th>
+                    <th>Provider</th>
+                    <th>Model</th>
+                    <th>Agents</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {jobs.map((job) => (
+                    <tr key={job.id}>
+                      <td>{job.title}</td>
+                      <td>{job.provider}</td>
+                      <td>{job.model}</td>
+                      <td>{job.agents_count ?? 0}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            ) : (
+              <div className="emptyState">
+                No jobs yet. Use <a href={canAct ? `/jobs/create?swarmId=${encodeURIComponent(swarmId)}` : '/jobs/create'} style={{ color: 'var(--accent)', textDecoration: 'underline' }}>Create Job</a> to add to the global catalog, then <a href={canAct ? `/swarms/manage-jobs?swarmId=${encodeURIComponent(swarmId)}` : '/swarms/manage-jobs'} style={{ color: 'var(--accent)', textDecoration: 'underline' }}>Assign Jobs</a> for this swarm.
+              </div>
+            )}
+          </article>
+
+          <article className="formCard">
+            <div className="sectionHeader">
+              <h2>Submit tasks</h2>
+              <span className="tag">batch</span>
+            </div>
+            <form onSubmit={submitTasks} className="stack">
+              <div className="field">
+                <label htmlFor="required-job">Assign to job (optional, title or id)</label>
+                <input
+                  id="required-job"
+                  list="job-options"
+                  value={requiredJob}
+                  onChange={(e) => setRequiredJob(e.target.value)}
+                  placeholder="coder"
+                  disabled={busy}
+                />
+                <datalist id="job-options">
+                  {jobs.map((job) => (
+                    <option key={job.id} value={job.title}>
+                      {job.provider}/{job.model}
+                    </option>
+                  ))}
+                </datalist>
+              </div>
+              <div className="field">
+                <label htmlFor="task-input">Task input</label>
+                <textarea
+                  id="task-input"
+                  value={taskInput}
+                  onChange={(e) => setTaskInput(e.target.value)}
+                  placeholder={'- [ ] Implement login\n- [ ] Review pull request'}
+                  disabled={busy}
+                />
+              </div>
+              <div className="actions">
+                <button type="submit" className="button buttonPrimary" disabled={busy || !canAct || !taskInput.trim()}>
+                  Queue tasks
+                </button>
+              </div>
+            </form>
+            {taskMessage ? <div className="notice" style={{ marginTop: '1rem' }}>{taskMessage}</div> : null}
+          </article>
+        </div>
       </div>
     </main>
   );
