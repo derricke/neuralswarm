@@ -268,8 +268,8 @@ function pickAgent(
 
   if (recommended) return recommended;
 
-  // Prefer highest health_score
-  return eligible.sort((a, b) => b.health_score - a.health_score)[0];
+  // For auto-pick tasks, prefer proven agents first, then health score.
+  return eligible.sort(compareAgentsForRouting)[0];
 }
 
 export function routeTaskWithJob(task: TaskRow, excludeAgentId: string | null): AgentRow | undefined {
@@ -305,7 +305,21 @@ function pickAgentForJob(
 
   if (eligible.length === 0) return undefined;
 
-  return eligible.sort((a, b) => b.health_score - a.health_score)[0];
+  return eligible.sort(compareAgentsForRouting)[0];
+}
+
+function compareAgentsForRouting(a: AgentRow, b: AgentRow): number {
+  const successRateDelta = getSuccessRate(b) - getSuccessRate(a);
+  if (successRateDelta !== 0) return successRateDelta;
+
+  return b.health_score - a.health_score;
+}
+
+function getSuccessRate(agent: AgentRow): number {
+  if (agent.tasks_assigned === 0) return 0;
+
+  const successes = agent.tasks_assigned - agent.tasks_failed;
+  return successes / agent.tasks_assigned;
 }
 
 function getJobById(jobId: string, swarmId: string): JobRow | null {
