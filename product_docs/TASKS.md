@@ -156,9 +156,9 @@
   - [x] Cleanup job (>90 days in archive → delete)
 
 - [ ] **Documentation**
-  - [ ] README: quickstart, architecture, example workflow
+  - [x] README: quickstart, architecture, example workflow
   - [ ] API documentation (OpenAPI/Swagger)
-  - [ ] Environment variables guide (ANTHROPIC_API_KEY, OPENAI_API_KEY, etc.)
+  - [x] Environment variables guide (ANTHROPIC_API_KEY, OPENAI_API_KEY, etc.)
   - [ ] Docker setup instructions
 
 - [ ] **Deployment**

@@ -44,8 +44,13 @@ OLLAMA_HOST=http://localhost:11434
 
 # Optional
 PORT=3000
-DATABASE_URL=./data/neuralswarm.db  # Defaults to data/neuralswarm.db
+DATABASE_URL=./data/neuralswarm.db  # Empty/blank also falls back to data/neuralswarm.db
 NODE_ENV=development
+
+# Frontend -> backend
+NEXT_PUBLIC_API_BASE_URL=http://localhost:3000
+# Optional fallback key for frontend requests. Can also be set at runtime in the UI.
+NEXT_PUBLIC_API_KEY=
 ```
 
 Alternatively, copy and modify `.env.example`:
@@ -70,6 +75,18 @@ In a separate terminal:
 npm --prefix web run dev
 # Dashboard at http://localhost:3001
 ```
+
+### Create API Key For Protected Endpoints
+
+Most endpoints (including `POST /swarms`) require a bearer token.
+
+```bash
+curl -s -X POST http://localhost:3000/api-keys \
+  -H "Content-Type: application/json" \
+  -d '{"name":"frontend-dev"}'
+```
+
+Copy the returned `key` value and paste it into the API key field on the swarm create page. The web app stores it in browser local storage and uses it for subsequent requests.
 
 ## Architecture
 
@@ -108,6 +125,8 @@ npm --prefix web run dev
 ```
 
 ### Swarms
+
+**`POST /api-keys`** — Create an API key (public bootstrapping endpoint)
 
 **`POST /swarms`** — Create a swarm
 
@@ -187,6 +206,12 @@ Returns: recommended provider/model + top similar trajectories
 ```
 
 ## Development
+
+### Auth Notes (Frontend)
+
+- The frontend API client resolves auth key in this order: browser local storage, then `NEXT_PUBLIC_API_KEY`.
+- On `401` with `Invalid or expired API key`, the client clears the stored key and retries once with fallback configuration.
+- If a request still fails, create a new key with `POST /api-keys` and paste it in the UI.
 
 ### Project Structure
 
