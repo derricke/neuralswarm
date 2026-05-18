@@ -16,6 +16,7 @@ import jobsRouter from './routes/jobs';
 import { apiKeyAuth } from './middleware/auth';
 import { requestTracing } from './middleware/tracing';
 import { createRateLimiter } from './middleware/rateLimiter';
+import { isDatabaseUnavailableError } from './lib/db';
 
 function sanitizeError(message: string): string {
   // Remove API keys and sensitive patterns from error messages
@@ -84,6 +85,14 @@ export function createApp() {
     const sanitized = sanitizeError(message);
 
     logger.error({ error: sanitized }, 'unhandled error');
+
+    if (isDatabaseUnavailableError(err)) {
+      res.status(503).json({
+        error: 'service_unavailable',
+        message: 'Database is unavailable. Check DATABASE_URL and ensure the database directory exists.',
+      });
+      return;
+    }
 
     if (err instanceof SyntaxError && 'body' in err) {
       res.status(400).json({ error: 'invalid_json', message: 'Request body must be valid JSON' });

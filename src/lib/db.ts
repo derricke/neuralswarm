@@ -4,11 +4,37 @@ import { logger } from './logger';
 
 let _db: Database.Database | null = null;
 
+export class DatabaseUnavailableError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'DatabaseUnavailableError';
+  }
+}
+
+export function isDatabaseUnavailableError(error: unknown): error is DatabaseUnavailableError {
+  return error instanceof DatabaseUnavailableError;
+}
+
 export function getDb(): Database.Database {
   if (_db) return _db;
 
   const dbPath = process.env.DATABASE_URL ?? path.join(process.cwd(), 'data', 'neuralswarm.db');
-  _db = new Database(dbPath);
+  try {
+    _db = new Database(dbPath);
+  } catch (error) {
+    logger.error(
+      {
+        path: dbPath,
+        error: error instanceof Error ? error.message : String(error),
+      },
+      'database open failed'
+    );
+
+    throw new DatabaseUnavailableError(
+      'Database is unavailable. Check DATABASE_URL and ensure the database directory exists.'
+    );
+  }
+
   _db.pragma('journal_mode = WAL');
   _db.pragma('foreign_keys = ON');
 
