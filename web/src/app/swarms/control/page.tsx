@@ -201,7 +201,7 @@ export default function SwarmControlPage() {
           </div>
         </section>
 
-        <article className="formCard">
+        <article className="formCard" style={{ marginTop: '1rem' }}>
           <div className="sectionHeader">
             <h2>Swarm selection</h2>
             <span className="tag">required</span>
@@ -236,7 +236,7 @@ export default function SwarmControlPage() {
           {startMessage ? <div className="notice" style={{ marginTop: '1rem' }}>{startMessage}</div> : null}
         </article>
 
-        <article className="formCard">
+        <article className="formCard" style={{ marginTop: '1rem' }}>
           <div className="sectionHeader">
             <h2>Create optional job</h2>
             <span className="tag">optional</span>
