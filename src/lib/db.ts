@@ -90,6 +90,22 @@ function runMigrations(db: Database.Database) {
       created_at   INTEGER NOT NULL DEFAULT (unixepoch())
     );
 
+    CREATE TABLE IF NOT EXISTS agent_type_profiles (
+      id                   TEXT PRIMARY KEY,
+      provider             TEXT NOT NULL,
+      model                TEXT NOT NULL,
+      best_system_prompt   TEXT,
+      temperature          REAL DEFAULT 0.7,
+      top_k_tokens         INTEGER DEFAULT 1024,
+      specialization       TEXT,
+      success_rate         REAL DEFAULT 0.0,
+      total_tasks          INTEGER NOT NULL DEFAULT 0,
+      failure_patterns     TEXT DEFAULT '[]',
+      created_at           INTEGER NOT NULL DEFAULT (unixepoch()),
+      updated_at           INTEGER NOT NULL DEFAULT (unixepoch()),
+      UNIQUE(provider, model)
+    );
+
     CREATE TABLE IF NOT EXISTS api_keys (
       id          TEXT PRIMARY KEY,
       name        TEXT NOT NULL,
@@ -127,6 +143,7 @@ function runMigrations(db: Database.Database) {
     CREATE INDEX IF NOT EXISTS idx_api_keys_key ON api_keys(key);
     CREATE INDEX IF NOT EXISTS idx_trajectories_swarm ON trajectories(swarm_id);
     CREATE INDEX IF NOT EXISTS idx_trajectories_created ON trajectories(created_at);
+    CREATE INDEX IF NOT EXISTS idx_agent_type_profiles_lookup ON agent_type_profiles(provider, model);
     CREATE INDEX IF NOT EXISTS idx_webhooks_active ON webhooks(active);
     CREATE INDEX IF NOT EXISTS idx_webhook_deliveries_webhook ON webhook_deliveries(webhook_id);
     CREATE INDEX IF NOT EXISTS idx_webhook_deliveries_created ON webhook_deliveries(created_at);

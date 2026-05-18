@@ -4,6 +4,7 @@ import { spawnAgent } from '../agents/spawner';
 import { logger } from '../lib/logger';
 import { logTrajectory } from '../memory/trajectoryStore';
 import { getLearningEngine } from '../learning/engine';
+import { getOrCreateAgentTypeProfile, updateAgentTypeProfileAfterTask } from '../agents/typeProfile';
 import type { AgentConfig, AgentProvider } from '../agents/types';
 
 const MAX_RETRIES = 3;
@@ -72,9 +73,15 @@ export async function runTask(taskId: string): Promise<void> {
     ).run(agent.id);
 
     try {
+      // Load agent type profile (learned traits)
+      const typeProfile = await getOrCreateAgentTypeProfile(agent.provider, agent.model);
+
       const config: AgentConfig = {
         provider: agent.provider,
         model: agent.model,
+        systemPrompt: typeProfile.best_system_prompt ?? undefined,
+        temperature: typeProfile.temperature,
+        maxTokens: typeProfile.top_k_tokens,
       };
 
       const taskStart = Date.now();
@@ -87,6 +94,15 @@ export async function runTask(taskId: string): Promise<void> {
       db.prepare(
         `UPDATE agents SET status = 'idle', consecutive_failures = 0, updated_at = unixepoch() WHERE id = ?`
       ).run(agent.id);
+
+      // Update agent type profile with success
+      await updateAgentTypeProfileAfterTask(
+        agent.provider,
+        agent.model,
+        task.description,
+        result.output,
+        true
+      );
 
       await learningEngine.recordTrajectory({
         taskId,
@@ -117,6 +133,15 @@ export async function runTask(taskId: string): Promise<void> {
           updated_at = unixepoch()
         WHERE id = ?
       `).run(errorType, errorType, agent.id);
+
+      // Update agent type profile with failure
+      await updateAgentTypeProfileAfterTask(
+        agent.provider,
+        agent.model,
+        task.description,
+        errorType,
+        false
+      );
 
       await learningEngine.recordTrajectory({
         taskId,

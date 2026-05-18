@@ -5,6 +5,7 @@ export type AgentConfig = {
   model: string;
   systemPrompt?: string;
   maxTokens?: number;
+  temperature?: number;
 };
 
 export type AgentResult = {
