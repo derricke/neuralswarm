@@ -63,6 +63,9 @@ function runMigrations(db: Database.Database) {
         provider             TEXT NOT NULL,
         model                TEXT NOT NULL,
         system_prompt        TEXT NOT NULL,
+        tasks_assigned       INTEGER NOT NULL DEFAULT 0,
+        tasks_completed      INTEGER NOT NULL DEFAULT 0,
+        tasks_failed         INTEGER NOT NULL DEFAULT 0,
         created_at           INTEGER NOT NULL DEFAULT (unixepoch()),
         updated_at           INTEGER NOT NULL DEFAULT (unixepoch()),
         UNIQUE(swarm_id, title)
@@ -173,6 +176,9 @@ function runMigrations(db: Database.Database) {
   ensureColumnExists(db, 'tasks', 'required_job', 'TEXT REFERENCES swarm_jobs(id)');
   ensureColumnExists(db, 'agents', 'job_id', 'TEXT REFERENCES swarm_jobs(id)');
   ensureColumnExists(db, 'trajectories', 'job_id', 'TEXT REFERENCES swarm_jobs(id)');
+  ensureColumnExists(db, 'swarm_jobs', 'tasks_assigned', 'INTEGER NOT NULL DEFAULT 0');
+  ensureColumnExists(db, 'swarm_jobs', 'tasks_completed', 'INTEGER NOT NULL DEFAULT 0');
+  ensureColumnExists(db, 'swarm_jobs', 'tasks_failed', 'INTEGER NOT NULL DEFAULT 0');
 }
 
 function ensureColumnExists(

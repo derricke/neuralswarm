@@ -135,6 +135,9 @@ export async function runTask(taskId: string): Promise<void> {
     db.prepare(
       `UPDATE agents SET tasks_assigned = tasks_assigned + 1, status = 'busy', updated_at = unixepoch() WHERE id = ?`
     ).run(agent.id);
+    if (agent.job_id) {
+      incrementJobMetric(agent.job_id, 'tasks_assigned');
+    }
 
     try {
       // Load agent type profile (learned traits)
@@ -159,6 +162,9 @@ export async function runTask(taskId: string): Promise<void> {
       db.prepare(
         `UPDATE agents SET status = 'idle', consecutive_failures = 0, updated_at = unixepoch() WHERE id = ?`
       ).run(agent.id);
+      if (agent.job_id) {
+        incrementJobMetric(agent.job_id, 'tasks_completed');
+      }
 
       // Update agent type profile with success
       await updateAgentTypeProfileAfterTask(
@@ -199,6 +205,9 @@ export async function runTask(taskId: string): Promise<void> {
           updated_at = unixepoch()
         WHERE id = ?
       `).run(errorType, errorType, agent.id);
+      if (agent.job_id) {
+        incrementJobMetric(agent.job_id, 'tasks_failed');
+      }
 
       // Update agent type profile with failure
       await updateAgentTypeProfileAfterTask(
@@ -329,6 +338,11 @@ function getJobById(jobId: string, swarmId: string): JobRow | null {
     .get(jobId, swarmId) as JobRow | undefined;
 
   return job ?? null;
+}
+
+function incrementJobMetric(jobId: string, column: 'tasks_assigned' | 'tasks_completed' | 'tasks_failed'): void {
+  const db = getDb();
+  db.prepare(`UPDATE swarm_jobs SET ${column} = ${column} + 1, updated_at = unixepoch() WHERE id = ?`).run(jobId);
 }
 
 async function hireAgentsForSwarm(
