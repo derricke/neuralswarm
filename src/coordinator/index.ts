@@ -45,6 +45,7 @@ type TaskRow = {
 type JobRow = {
   id: string;
   swarm_id: string;
+  global_job_id: string | null;
   title: string;
   provider: AgentProvider;
   model: string;
@@ -411,7 +412,19 @@ function getSuccessRate(agent: AgentRow): number {
 function getJobById(jobId: string, swarmId: string): JobRow | null {
   const db = getDb();
   const job = db
-    .prepare(`SELECT id, swarm_id, title, provider, model, system_prompt FROM swarm_jobs WHERE id = ? AND swarm_id = ?`)
+    .prepare(
+      `SELECT
+        sj.id,
+        sj.swarm_id,
+        sj.global_job_id,
+        COALESCE(g.title, sj.title) AS title,
+        COALESCE(g.provider, sj.provider) AS provider,
+        COALESCE(g.model, sj.model) AS model,
+        COALESCE(g.system_prompt, sj.system_prompt) AS system_prompt
+      FROM swarm_jobs sj
+      LEFT JOIN global_jobs g ON g.id = sj.global_job_id
+      WHERE sj.id = ? AND sj.swarm_id = ?`
+    )
     .get(jobId, swarmId) as JobRow | undefined;
 
   return job ?? null;
@@ -430,7 +443,19 @@ async function hireAgentsForSwarm(
   let hired = 0;
 
   const jobs = db
-    .prepare(`SELECT id, swarm_id, title, provider, model, system_prompt FROM swarm_jobs WHERE swarm_id = ?`)
+    .prepare(
+      `SELECT
+        sj.id,
+        sj.swarm_id,
+        sj.global_job_id,
+        COALESCE(g.title, sj.title) AS title,
+        COALESCE(g.provider, sj.provider) AS provider,
+        COALESCE(g.model, sj.model) AS model,
+        COALESCE(g.system_prompt, sj.system_prompt) AS system_prompt
+      FROM swarm_jobs sj
+      LEFT JOIN global_jobs g ON g.id = sj.global_job_id
+      WHERE sj.swarm_id = ?`
+    )
     .all(swarmId) as JobRow[];
 
   if (jobs.length > 0) {

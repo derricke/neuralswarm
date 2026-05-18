@@ -12,10 +12,54 @@ function isAgentProvider(value: unknown): value is AgentProvider {
 }
 
 /**
+ * GET /jobs
+ * List all global jobs
+ */
+router.get('/jobs', async (_req: Request, res: Response) => {
+  try {
+    const jobs = jobManager.listGlobalJobs();
+    res.json({ jobs });
+  } catch (err) {
+    logger.error({ error: err }, 'GET /jobs failed');
+    res.status(500).json({ error: 'Failed to list global jobs' });
+  }
+});
+
+/**
+ * POST /jobs
+ * Create a global job
+ */
+router.post('/jobs', async (req: Request, res: Response) => {
+  try {
+    const { title, description, required_capabilities, provider, model, system_prompt } = req.body;
+
+    if (!title || !provider || !model || !system_prompt) {
+      return res.status(400).json({
+        error: 'Missing required fields: title, provider, model, system_prompt',
+      });
+    }
+
+    const job = await jobManager.createGlobalJob({
+      title,
+      description,
+      required_capabilities,
+      provider,
+      model,
+      system_prompt,
+    });
+
+    res.status(201).json(job);
+  } catch (err) {
+    logger.error({ error: err }, 'POST /jobs failed');
+    res.status(500).json({ error: 'Failed to create global job' });
+  }
+});
+
+/**
  * POST /swarms/:swarmId/agents
  * Hire an agent for a specific job
  */
-router.post('/:swarmId/agents', async (req: Request, res: Response) => {
+router.post('/swarms/:swarmId/agents', async (req: Request, res: Response) => {
   try {
     const swarmId = String(req.params.swarmId);
     const jobId = String(req.body.job_id ?? '');
@@ -49,16 +93,22 @@ router.post('/:swarmId/agents', async (req: Request, res: Response) => {
 
 /**
  * POST /swarms/:id/jobs
- * Define a job in the swarm
+ * Assign a global job to a swarm, or create+assign when global_job_id is omitted
  */
-router.post('/:swarmId/jobs', async (req: Request, res: Response) => {
+router.post('/swarms/:swarmId/jobs', async (req: Request, res: Response) => {
   try {
     const swarmId = String(req.params.swarmId);
-    const { title, description, required_capabilities, provider, model, system_prompt } = req.body;
+    const { global_job_id, title, description, required_capabilities, provider, model, system_prompt } = req.body;
+
+    if (global_job_id) {
+      const job = await jobManager.assignGlobalJobToSwarm(swarmId, String(global_job_id));
+      res.status(201).json(job);
+      return;
+    }
 
     if (!title || !provider || !model || !system_prompt) {
       return res.status(400).json({
-        error: 'Missing required fields: title, provider, model, system_prompt',
+        error: 'Missing required fields: global_job_id or title, provider, model, system_prompt',
       });
     }
 
@@ -74,7 +124,7 @@ router.post('/:swarmId/jobs', async (req: Request, res: Response) => {
     res.status(201).json(job);
   } catch (err) {
     logger.error({ error: err }, 'POST /swarms/:id/jobs failed');
-    res.status(500).json({ error: 'Failed to create job' });
+    res.status(500).json({ error: 'Failed to assign job' });
   }
 });
 
@@ -82,7 +132,7 @@ router.post('/:swarmId/jobs', async (req: Request, res: Response) => {
  * GET /swarms/:id/jobs
  * List all jobs in a swarm
  */
-router.get('/:swarmId/jobs', async (req: Request, res: Response) => {
+router.get('/swarms/:swarmId/jobs', async (req: Request, res: Response) => {
   try {
     const swarmId = String(req.params.swarmId);
     const jobs = jobManager.listJobsWithAgentCounts(swarmId);
@@ -97,7 +147,7 @@ router.get('/:swarmId/jobs', async (req: Request, res: Response) => {
  * GET /swarms/:swarmId/jobs/:jobId
  * Get a specific job
  */
-router.get('/:swarmId/jobs/:jobId', async (req: Request, res: Response) => {
+router.get('/swarms/:swarmId/jobs/:jobId', async (req: Request, res: Response) => {
   try {
     const jobId = String(req.params.jobId);
     const job = jobManager.getJobById(jobId);
@@ -118,7 +168,7 @@ router.get('/:swarmId/jobs/:jobId', async (req: Request, res: Response) => {
  * GET /swarms/:swarmId/jobs/:jobId/agents
  * List agents hired for a specific job
  */
-router.get('/:swarmId/jobs/:jobId/agents', async (req: Request, res: Response) => {
+router.get('/swarms/:swarmId/jobs/:jobId/agents', async (req: Request, res: Response) => {
   try {
     const swarmId = String(req.params.swarmId);
     const jobId = String(req.params.jobId);
@@ -147,7 +197,7 @@ router.get('/:swarmId/jobs/:jobId/agents', async (req: Request, res: Response) =
  * PUT /swarms/:swarmId/jobs/:jobId
  * Update a job
  */
-router.put('/:swarmId/jobs/:jobId', async (req: Request, res: Response) => {
+router.put('/swarms/:swarmId/jobs/:jobId', async (req: Request, res: Response) => {
   try {
     const jobId = String(req.params.jobId);
     const { system_prompt } = req.body;
@@ -170,7 +220,7 @@ router.put('/:swarmId/jobs/:jobId', async (req: Request, res: Response) => {
  * DELETE /swarms/:swarmId/jobs/:jobId
  * Delete a job
  */
-router.delete('/:swarmId/jobs/:jobId', async (req: Request, res: Response) => {
+router.delete('/swarms/:swarmId/jobs/:jobId', async (req: Request, res: Response) => {
   try {
     const jobId = String(req.params.jobId);
 

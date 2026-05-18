@@ -3,7 +3,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { fetchJson } from '@/lib/api';
-import { type JobTemplate, loadJobTemplates, templateKey } from '@/lib/jobTemplates';
 
 type SwarmOption = {
   id: string;
@@ -12,6 +11,7 @@ type SwarmOption = {
 
 type JobRow = {
   id: string;
+  global_job_id?: string | null;
   swarm_id: string;
   title: string;
   description?: string;
@@ -19,6 +19,17 @@ type JobRow = {
   model: string;
   system_prompt: string;
   agents_count?: number;
+};
+
+type Provider = 'openai' | 'anthropic' | 'google' | 'ollama';
+
+type GlobalJob = {
+  id: string;
+  title: string;
+  description?: string;
+  provider: Provider;
+  model: string;
+  system_prompt: string;
 };
 
 type SubmitState = 'idle' | 'loading' | 'success' | 'error';
@@ -30,8 +41,8 @@ export default function ManageJobsPage() {
   const [swarms, setSwarms] = useState<SwarmOption[]>([]);
   const [jobs, setJobs] = useState<JobRow[]>([]);
 
-  const [templates, setTemplates] = useState<JobTemplate[]>([]);
-  const [selectedTemplateKey, setSelectedTemplateKey] = useState('');
+  const [globalJobs, setGlobalJobs] = useState<GlobalJob[]>([]);
+  const [selectedGlobalJobId, setSelectedGlobalJobId] = useState('');
 
   const [state, setState] = useState<SubmitState>('idle');
   const [message, setMessage] = useState('');
@@ -52,7 +63,9 @@ export default function ManageJobsPage() {
   }, []);
 
   useEffect(() => {
-    setTemplates(loadJobTemplates());
+    fetchJson<{ jobs: GlobalJob[] }>('/jobs')
+      .then((result) => setGlobalJobs(result.jobs))
+      .catch(() => setGlobalJobs([]));
   }, []);
 
   useEffect(() => {
@@ -75,16 +88,15 @@ export default function ManageJobsPage() {
     setJobs(result.jobs);
   }
 
-  async function addFromTemplate() {
+  async function addFromCatalog() {
     if (!canAct) {
       setMessage('Select a swarm first');
       setState('error');
       return;
     }
 
-    const template = templates.find((item) => templateKey(item) === selectedTemplateKey);
-    if (!template) {
-      setMessage('Select a saved job template');
+    if (!selectedGlobalJobId) {
+      setMessage('Select a global job');
       setState('error');
       return;
     }
@@ -95,14 +107,15 @@ export default function ManageJobsPage() {
     try {
       await fetchJson<JobRow>(`/swarms/${swarmId}/jobs`, {
         method: 'POST',
-        body: JSON.stringify(template),
+        body: JSON.stringify({ global_job_id: selectedGlobalJobId }),
       });
 
       await refreshJobs();
-      setMessage(`Added template "${template.title}" to swarm`);
+      const selected = globalJobs.find((job) => job.id === selectedGlobalJobId);
+      setMessage(`Assigned global job "${selected?.title ?? selectedGlobalJobId}" to swarm`);
       setState('success');
     } catch (err) {
-      setMessage(err instanceof Error ? err.message : 'Failed to add template');
+      setMessage(err instanceof Error ? err.message : 'Failed to assign global job');
       setState('error');
     }
   }
@@ -154,20 +167,20 @@ export default function ManageJobsPage() {
             <label htmlFor="saved-template">Global job</label>
             <select
               id="saved-template"
-              value={selectedTemplateKey}
-              onChange={(e) => setSelectedTemplateKey(e.target.value)}
+              value={selectedGlobalJobId}
+              onChange={(e) => setSelectedGlobalJobId(e.target.value)}
               disabled={state === 'loading'}
             >
-              <option value="">Select a template</option>
-              {templates.map((template) => (
-                <option key={templateKey(template)} value={templateKey(template)}>
-                  {template.title} ({template.provider}/{template.model})
+              <option value="">Select a global job</option>
+              {globalJobs.map((job) => (
+                <option key={job.id} value={job.id}>
+                  {job.title} ({job.provider}/{job.model})
                 </option>
               ))}
             </select>
           </div>
           <div className="actions">
-            <button type="button" className="button buttonPrimary" onClick={addFromTemplate} disabled={state === 'loading' || !canAct || !selectedTemplateKey}>
+            <button type="button" className="button buttonPrimary" onClick={addFromCatalog} disabled={state === 'loading' || !canAct || !selectedGlobalJobId}>
               Assign job to swarm
             </button>
             <a className="button" href={canAct ? `/jobs/create?swarmId=${encodeURIComponent(swarmId)}` : '/jobs/create'}>
