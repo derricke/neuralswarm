@@ -147,3 +147,104 @@ describe('Phase 2 explicit job routing', () => {
     );
   });
 });
+
+describe('Phase 3 auto-pick routing', () => {
+  it('runTask without required_job prefers learning recommendation when available', async () => {
+    const swarmId = insertSwarm();
+    const coderJobId = insertJob(swarmId, 'coder', 'openai', 'gpt-4o');
+    const reviewerJobId = insertJob(swarmId, 'reviewer', 'anthropic', 'claude-3-5-sonnet');
+
+    insertAgent(swarmId, coderJobId, 'openai', 'gpt-4o');
+    const recommendedAgentId = insertAgent(swarmId, reviewerJobId, 'anthropic', 'claude-3-5-sonnet');
+
+    const db = getDb();
+    const taskId = randomUUID();
+    db.prepare(`
+      INSERT INTO tasks (id, swarm_id, description, required_job)
+      VALUES (?, ?, ?, NULL)
+    `).run(taskId, swarmId, 'Review architecture docs');
+
+    mockRecommendAgentProfile.mockResolvedValue({
+      provider: 'anthropic',
+      model: 'claude-3-5-sonnet',
+      trajectoryId: 'trajectory-1',
+      distance: 0.1,
+      score: 0.9,
+    });
+
+    (spawnAgent as jest.Mock).mockResolvedValue({
+      provider: 'anthropic',
+      model: 'claude-3-5-sonnet',
+      output: 'reviewed',
+      inputTokens: 10,
+      outputTokens: 20,
+      durationMs: 100,
+    });
+
+    await runTask(taskId);
+
+    const task = db.prepare('SELECT status, agent_id FROM tasks WHERE id = ?').get(taskId) as {
+      status: string;
+      agent_id: string;
+    };
+
+    expect(task.status).toBe('completed');
+    expect(task.agent_id).toBe(recommendedAgentId);
+  });
+
+  it('runTask without required_job falls back to higher success-rate idle agent', async () => {
+    const swarmId = insertSwarm();
+    const coderJobId = insertJob(swarmId, 'coder', 'openai', 'gpt-4o');
+    const reviewerJobId = insertJob(swarmId, 'reviewer', 'anthropic', 'claude-3-5-sonnet');
+
+    const lowPerformerId = insertAgent(swarmId, coderJobId, 'openai', 'gpt-4o');
+    const highPerformerId = insertAgent(swarmId, reviewerJobId, 'anthropic', 'claude-3-5-sonnet');
+
+    const db = getDb();
+    db.prepare('UPDATE agents SET tasks_assigned = ?, tasks_failed = ?, health_score = ? WHERE id = ?').run(
+      10,
+      5,
+      0.95,
+      lowPerformerId
+    );
+    db.prepare('UPDATE agents SET tasks_assigned = ?, tasks_failed = ?, health_score = ? WHERE id = ?').run(
+      10,
+      1,
+      0.7,
+      highPerformerId
+    );
+
+    const taskId = randomUUID();
+    db.prepare(`
+      INSERT INTO tasks (id, swarm_id, description, required_job)
+      VALUES (?, ?, ?, NULL)
+    `).run(taskId, swarmId, 'General task with no explicit job');
+
+    mockRecommendAgentProfile.mockResolvedValue({
+      provider: 'google',
+      model: 'gemini-2.5-pro',
+      trajectoryId: 'trajectory-2',
+      distance: 0.4,
+      score: 0.7,
+    });
+
+    (spawnAgent as jest.Mock).mockResolvedValue({
+      provider: 'anthropic',
+      model: 'claude-3-5-sonnet',
+      output: 'completed',
+      inputTokens: 10,
+      outputTokens: 20,
+      durationMs: 100,
+    });
+
+    await runTask(taskId);
+
+    const task = db.prepare('SELECT status, agent_id FROM tasks WHERE id = ?').get(taskId) as {
+      status: string;
+      agent_id: string;
+    };
+
+    expect(task.status).toBe('completed');
+    expect(task.agent_id).toBe(highPerformerId);
+  });
+});
