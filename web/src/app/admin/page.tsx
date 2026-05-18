@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { API_BASE_URL, API_AUTH_KEY } from '@/lib/api';
 
 interface SystemHealth {
   status: string;
@@ -47,12 +48,14 @@ export default function AdminDashboard() {
   const [activeTab, setActiveTab] = useState<'overview' | 'keys' | 'webhooks'>('overview');
 
   useEffect(() => {
+    const authHeaders = API_AUTH_KEY ? { Authorization: `Bearer ${API_AUTH_KEY}` } : undefined;
+
     const fetchData = async () => {
       try {
         const [healthRes, keysRes, webhooksRes] = await Promise.all([
-          fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:3000'}/diagnostics/health`),
-          fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:3000'}/api-keys`),
-          fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:3000'}/webhooks`),
+          fetch(`${API_BASE_URL}/diagnostics/health`, { headers: authHeaders, cache: 'no-store' }),
+          fetch(`${API_BASE_URL}/api-keys`, { headers: authHeaders, cache: 'no-store' }),
+          fetch(`${API_BASE_URL}/webhooks`, { headers: authHeaders, cache: 'no-store' }),
         ]);
 
         if (healthRes.ok) {
