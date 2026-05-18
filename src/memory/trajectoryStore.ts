@@ -6,6 +6,7 @@ export type TrajectoryRecord = {
   taskId: string;
   swarmId: string;
   agentId: string | null;
+  jobId?: string | null;
   provider: string;
   model: string;
   description: string;
@@ -26,13 +27,14 @@ export function logTrajectory(record: TrajectoryRecord): string {
 
   db.prepare(`
     INSERT INTO trajectories
-      (id, task_id, swarm_id, agent_id, provider, model, description, result, success, retries, duration_ms)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      (id, task_id, swarm_id, agent_id, job_id, provider, model, description, result, success, retries, duration_ms)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
     id,
     record.taskId,
     record.swarmId,
     record.agentId,
+    record.jobId ?? null,
     record.provider,
     record.model,
     record.description,

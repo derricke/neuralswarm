@@ -40,6 +40,7 @@ function runMigrations(db: Database.Database) {
     CREATE TABLE IF NOT EXISTS agents (
       id                   TEXT PRIMARY KEY,
       swarm_id             TEXT NOT NULL REFERENCES swarms(id) ON DELETE CASCADE,
+      job_id               TEXT REFERENCES swarm_jobs(id),
       provider             TEXT NOT NULL,
       model                TEXT NOT NULL,
       status               TEXT NOT NULL DEFAULT 'idle',
@@ -53,10 +54,25 @@ function runMigrations(db: Database.Database) {
       updated_at           INTEGER NOT NULL DEFAULT (unixepoch())
     );
 
+      CREATE TABLE IF NOT EXISTS swarm_jobs (
+        id                   TEXT PRIMARY KEY,
+        swarm_id             TEXT NOT NULL REFERENCES swarms(id) ON DELETE CASCADE,
+        title                TEXT NOT NULL,
+        description          TEXT,
+        required_capabilities TEXT DEFAULT '[]',
+        provider             TEXT NOT NULL,
+        model                TEXT NOT NULL,
+        system_prompt        TEXT NOT NULL,
+        created_at           INTEGER NOT NULL DEFAULT (unixepoch()),
+        updated_at           INTEGER NOT NULL DEFAULT (unixepoch()),
+        UNIQUE(swarm_id, title)
+      );
+
     CREATE TABLE IF NOT EXISTS tasks (
       id          TEXT PRIMARY KEY,
       swarm_id    TEXT NOT NULL REFERENCES swarms(id) ON DELETE CASCADE,
       agent_id    TEXT REFERENCES agents(id),
+      required_job TEXT REFERENCES swarm_jobs(id),
       description TEXT NOT NULL,
       status      TEXT NOT NULL DEFAULT 'pending',
       retries     INTEGER NOT NULL DEFAULT 0,
@@ -78,6 +94,7 @@ function runMigrations(db: Database.Database) {
       task_id      TEXT NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
       swarm_id     TEXT NOT NULL REFERENCES swarms(id) ON DELETE CASCADE,
       agent_id     TEXT,
+      job_id       TEXT REFERENCES swarm_jobs(id),
       provider     TEXT NOT NULL,
       model        TEXT NOT NULL,
       description  TEXT NOT NULL,
@@ -142,10 +159,32 @@ function runMigrations(db: Database.Database) {
 
     CREATE INDEX IF NOT EXISTS idx_api_keys_key ON api_keys(key);
     CREATE INDEX IF NOT EXISTS idx_trajectories_swarm ON trajectories(swarm_id);
+    CREATE INDEX IF NOT EXISTS idx_trajectories_job ON trajectories(job_id);
     CREATE INDEX IF NOT EXISTS idx_trajectories_created ON trajectories(created_at);
     CREATE INDEX IF NOT EXISTS idx_agent_type_profiles_lookup ON agent_type_profiles(provider, model);
     CREATE INDEX IF NOT EXISTS idx_webhooks_active ON webhooks(active);
     CREATE INDEX IF NOT EXISTS idx_webhook_deliveries_webhook ON webhook_deliveries(webhook_id);
     CREATE INDEX IF NOT EXISTS idx_webhook_deliveries_created ON webhook_deliveries(created_at);
+      CREATE INDEX IF NOT EXISTS idx_swarm_jobs_swarm ON swarm_jobs(swarm_id);
+      CREATE INDEX IF NOT EXISTS idx_agents_job ON agents(job_id);
+      CREATE INDEX IF NOT EXISTS idx_tasks_required_job ON tasks(required_job);
   `);
+
+  ensureColumnExists(db, 'tasks', 'required_job', 'TEXT REFERENCES swarm_jobs(id)');
+  ensureColumnExists(db, 'agents', 'job_id', 'TEXT REFERENCES swarm_jobs(id)');
+  ensureColumnExists(db, 'trajectories', 'job_id', 'TEXT REFERENCES swarm_jobs(id)');
+}
+
+function ensureColumnExists(
+  db: Database.Database,
+  table: string,
+  column: string,
+  definition: string
+) {
+  const columns = db.prepare(`PRAGMA table_info(${table})`).all() as Array<{ name: string }>;
+  const exists = columns.some((c) => c.name === column);
+
+  if (!exists) {
+    db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`);
+  }
 }

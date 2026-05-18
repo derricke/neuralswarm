@@ -9,6 +9,7 @@ export const tasksRouter = Router();
 const SubmitTasksSchema = z.object({
   swarm_id: z.string().uuid(),
   input: z.string().min(1),
+  required_job: z.string().uuid().optional(),
 });
 
 // POST /tasks — parse raw input and queue tasks against a swarm
@@ -19,13 +20,23 @@ tasksRouter.post('/', (req: Request, res: Response) => {
     return;
   }
 
-  const { swarm_id, input } = parsed.data;
+  const { swarm_id, input, required_job } = parsed.data;
   const db = getDb();
 
   const swarm = db.prepare('SELECT id FROM swarms WHERE id = ?').get(swarm_id);
   if (!swarm) {
     res.status(404).json({ error: 'swarm_not_found' });
     return;
+  }
+
+  if (required_job) {
+    const job = db
+      .prepare('SELECT id FROM swarm_jobs WHERE id = ? AND swarm_id = ?')
+      .get(required_job, swarm_id);
+    if (!job) {
+      res.status(404).json({ error: 'job_not_found' });
+      return;
+    }
   }
 
   const taskInputs = parseTaskInput(input);
@@ -35,12 +46,12 @@ tasksRouter.post('/', (req: Request, res: Response) => {
   }
 
   const insert = db.prepare(
-    `INSERT INTO tasks (id, swarm_id, description) VALUES (?, ?, ?)`
+    `INSERT INTO tasks (id, swarm_id, description, required_job) VALUES (?, ?, ?, ?)`
   );
 
   const insertMany = db.transaction(() => {
     for (const t of taskInputs) {
-      insert.run(randomUUID(), swarm_id, t.description);
+      insert.run(randomUUID(), swarm_id, t.description, required_job ?? null);
     }
   });
 
