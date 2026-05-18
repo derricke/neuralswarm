@@ -81,12 +81,10 @@ npm --prefix web run dev
 Most endpoints (including `POST /swarms`) require a bearer token.
 
 ```bash
-curl -s -X POST http://localhost:3000/api-keys \
-  -H "Content-Type: application/json" \
-  -d '{"name":"frontend-dev"}'
+npm run api-key:create -- --name frontend-dev
 ```
 
-Copy the returned `key` value and paste it into the API key field on the swarm create page. The web app stores it in browser local storage and uses it for subsequent requests.
+Run this command on the backend host. Copy the returned `key` value and paste it into the API key field on the swarm create page. The web app stores it in browser local storage and uses it for subsequent requests.
 
 ## Architecture
 
@@ -126,7 +124,7 @@ Copy the returned `key` value and paste it into the API key field on the swarm c
 
 ### Swarms
 
-**`POST /api-keys`** — Create an API key (public bootstrapping endpoint)
+**API keys are created only via backend command**: `npm run api-key:create -- --name <name> [--expires-in <seconds>]`
 
 **`POST /swarms`** — Create a swarm
 
@@ -211,7 +209,7 @@ Returns: recommended provider/model + top similar trajectories
 
 - The frontend API client resolves auth key in this order: browser local storage, then `NEXT_PUBLIC_API_KEY`.
 - On `401` with `Invalid or expired API key`, the client clears the stored key and retries once with fallback configuration.
-- If a request still fails, create a new key with `POST /api-keys` and paste it in the UI.
+- If a request still fails, create a new key with `npm run api-key:create -- --name frontend-dev` and paste it in the UI.
 
 ### Project Structure
 

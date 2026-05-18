@@ -1,62 +1,13 @@
 import { Router, Request, Response } from 'express';
 import { getDb } from '../lib/db';
 import { logger } from '../lib/logger';
-import { randomBytes, randomUUID } from 'crypto';
-import { z } from 'zod';
 
 export const apiKeysRouter = Router();
-
-const CreateApiKeySchema = z.object({
-  name: z.string().min(1).max(100),
-  expiresIn: z.number().optional().nullable(),
-});
 
 interface AuthRequest extends Request {
   apiKeyId?: string;
   apiKeyName?: string;
 }
-
-// POST /api-keys - Create a new API key
-apiKeysRouter.post('/', (req: AuthRequest, res: Response) => {
-  try {
-    const { name, expiresIn } = CreateApiKeySchema.parse(req.body);
-    const db = getDb();
-
-    const keyId = randomUUID();
-    const keySecret = randomBytes(32).toString('hex');
-    const expiresAt = expiresIn ? new Date(Date.now() + expiresIn * 1000).toISOString() : null;
-
-    db.prepare(
-      `INSERT INTO api_keys (id, name, key, expires_at) VALUES (?, ?, ?, ?)`
-    ).run(keyId, name, keySecret, expiresAt);
-
-    logger.info({ keyId, name }, 'api key created');
-
-    res.status(201).json({
-      id: keyId,
-      name,
-      key: keySecret,
-      expiresAt,
-      createdAt: new Date().toISOString(),
-      message: 'Save the key securely. It will not be shown again.',
-    });
-  } catch (error) {
-    if (error instanceof z.ZodError) {
-      return res.status(400).json({
-        error: 'invalid_request',
-        details: error.issues,
-      });
-    }
-    logger.error(
-      { error: error instanceof Error ? error.message : String(error) },
-      'failed to create api key'
-    );
-    res.status(500).json({
-      error: 'internal_server_error',
-      message: 'Failed to create API key',
-    });
-  }
-});
 
 // GET /api-keys - List API keys (redacted)
 apiKeysRouter.get('/', (req: AuthRequest, res: Response) => {

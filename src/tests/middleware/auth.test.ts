@@ -3,7 +3,7 @@ import express from 'express';
 import { apiKeyAuth } from '../../middleware/auth';
 import { apiKeysRouter } from '../../routes/apiKeys';
 import { getDb, resetDb } from '../../lib/db';
-import { randomBytes } from 'crypto';
+import { randomBytes, randomUUID } from 'crypto';
 
 beforeEach(() => {
   resetDb();
@@ -27,28 +27,34 @@ describe('API Key Authentication', () => {
     return app;
   }
 
-  it('should create an api key', async () => {
+  function seedApiKey(name: string, expiresIn?: number): { id: string; key: string } {
+    const db = getDb();
+    const id = randomUUID();
+    const key = randomBytes(32).toString('hex');
+    const expiresAt = expiresIn ? new Date(Date.now() + expiresIn * 1000).toISOString() : null;
+
+    db.prepare(`INSERT INTO api_keys (id, name, key, expires_at) VALUES (?, ?, ?, ?)`).run(
+      id,
+      name,
+      key,
+      expiresAt
+    );
+
+    return { id, key };
+  }
+
+  it('should reject unauthenticated api key creation over http', async () => {
     const app = createTestApp();
 
-    const response = await request(app)
-      .post('/api-keys')
-      .send({ name: 'test-key' });
+    const response = await request(app).post('/api-keys').send({ name: 'test-key' });
 
-    expect(response.status).toBe(201);
-    expect(response.body).toHaveProperty('id');
-    expect(response.body).toHaveProperty('key');
-    expect(response.body.name).toBe('test-key');
-    expect(response.body.key).toMatch(/^[a-f0-9]{64}$/);
+    expect(response.status).toBe(401);
+    expect(response.body.error).toBe('unauthorized');
   });
 
   it('should list api keys', async () => {
     const app = createTestApp();
-
-    // Create two keys first
-    const key1Res = await request(app)
-      .post('/api-keys')
-      .send({ name: 'key-1' });
-    const key1 = key1Res.body.key;
+    const key1 = seedApiKey('key-1').key;
 
     // List keys using the created key
     const listRes = await request(app)
@@ -83,13 +89,7 @@ describe('API Key Authentication', () => {
 
   it('should allow access with valid api key', async () => {
     const app = createTestApp();
-
-    // Create a key first
-    const createRes = await request(app)
-      .post('/api-keys')
-      .send({ name: 'valid-key' });
-
-    const validKey = createRes.body.key;
+    const validKey = seedApiKey('valid-key').key;
 
     // Access protected resource with valid key
     const response = await request(app)
@@ -102,14 +102,9 @@ describe('API Key Authentication', () => {
 
   it('should revoke an api key', async () => {
     const app = createTestApp();
-
-    // Create a key
-    const createRes = await request(app)
-      .post('/api-keys')
-      .send({ name: 'revoke-test' });
-
-    const keyId = createRes.body.id;
-    const key = createRes.body.key;
+    const seeded = seedApiKey('revoke-test');
+    const keyId = seeded.id;
+    const key = seeded.key;
 
     // Revoke the key
     const revokeRes = await request(app)
@@ -126,16 +121,15 @@ describe('API Key Authentication', () => {
     expect(accessRes.status).toBe(401);
   });
 
-  it('should allow creating api key with expiration', async () => {
+  it('should return not found when creating api key with valid auth', async () => {
     const app = createTestApp();
+    const adminKey = seedApiKey('admin').key;
 
-    const oneHourInSeconds = 3600;
     const response = await request(app)
       .post('/api-keys')
-      .send({ name: 'expiring-key', expiresIn: oneHourInSeconds });
+      .set('Authorization', `Bearer ${adminKey}`)
+      .send({ name: 'expiring-key', expiresIn: 3600 });
 
-    expect(response.status).toBe(201);
-    expect(response.body).toHaveProperty('expiresAt');
-    expect(response.body.expiresAt).toBeTruthy();
+    expect(response.status).toBe(404);
   });
 });

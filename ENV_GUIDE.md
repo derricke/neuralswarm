@@ -162,7 +162,7 @@ curl http://localhost:3000/metrics
 
 ### "Invalid or expired API key" from frontend
 
-- Generate a fresh backend key: `curl -s -X POST http://localhost:3000/api-keys -H "Content-Type: application/json" -d '{"name":"frontend-dev"}'`
+- Generate a fresh backend key: `npm run api-key:create -- --name frontend-dev`
 - Paste the returned `key` into the API key field in the web UI
 - If `DATABASE_URL` is blank in `.env.local`, backend now falls back to `./data/neuralswarm.db`; restart backend if needed
 

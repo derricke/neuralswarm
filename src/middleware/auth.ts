@@ -13,11 +13,6 @@ export function apiKeyAuth(req: AuthRequest, res: Response, next: NextFunction) 
     return next();
   }
 
-  // Allow creating first API key without authentication
-  if (req.method === 'POST' && req.path === '/api-keys') {
-    return next();
-  }
-
   const authHeader = req.headers.authorization;
 
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
