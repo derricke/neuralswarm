@@ -8,6 +8,8 @@ import { memoriesRouter } from './routes/memories';
 import { learningRouter } from './routes/learning';
 import { uiRouter } from './routes/ui';
 import { metricsRouter } from './routes/metrics';
+import { apiKeysRouter } from './routes/apiKeys';
+import { apiKeyAuth } from './middleware/auth';
 
 function sanitizeError(message: string): string {
   // Remove API keys and sensitive patterns from error messages
@@ -26,8 +28,8 @@ export function createApp() {
   app.use(express.json());
   app.use((req, res, next) => {
     res.setHeader('Access-Control-Allow-Origin', '*');
-    res.setHeader('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
-    res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+    res.setHeader('Access-Control-Allow-Methods', 'GET,POST,DELETE,OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type,Authorization');
 
     if (req.method === 'OPTIONS') {
       res.sendStatus(204);
@@ -42,6 +44,9 @@ export function createApp() {
     next();
   });
 
+  // Apply API key authentication (except for health and public endpoints)
+  app.use(apiKeyAuth);
+
   app.use('/health', healthRouter);
   app.use('/swarms', swarmsRouter);
   app.use('/tasks', tasksRouter);
@@ -50,6 +55,7 @@ export function createApp() {
   app.use('/learning', learningRouter);
   app.use('/ui', uiRouter);
   app.use('/metrics', metricsRouter);
+  app.use('/api-keys', apiKeysRouter);
 
   // 404 handler
   app.use((_req: Request, res: Response) => {
