@@ -9,6 +9,7 @@ import { learningRouter } from './routes/learning';
 import { uiRouter } from './routes/ui';
 import { metricsRouter } from './routes/metrics';
 import { apiKeysRouter } from './routes/apiKeys';
+import { webhooksRouter } from './routes/webhooks';
 import { apiKeyAuth } from './middleware/auth';
 
 function sanitizeError(message: string): string {
@@ -56,6 +57,7 @@ export function createApp() {
   app.use('/ui', uiRouter);
   app.use('/metrics', metricsRouter);
   app.use('/api-keys', apiKeysRouter);
+  app.use('/webhooks', webhooksRouter);
 
   // 404 handler
   app.use((_req: Request, res: Response) => {
