@@ -12,6 +12,7 @@ import { apiKeysRouter } from './routes/apiKeys';
 import { webhooksRouter } from './routes/webhooks';
 import { batchRouter } from './routes/batch';
 import { apiKeyAuth } from './middleware/auth';
+import { createRateLimiter } from './middleware/rateLimiter';
 
 function sanitizeError(message: string): string {
   // Remove API keys and sensitive patterns from error messages
@@ -45,6 +46,9 @@ export function createApp() {
     logger.info({ method: req.method, url: req.url }, 'request');
     next();
   });
+
+  // Apply rate limiting (100 requests per minute per API key/IP)
+  app.use(createRateLimiter({ windowMs: 60000, maxRequests: 100 }));
 
   // Apply API key authentication (except for health and public endpoints)
   app.use(apiKeyAuth);
