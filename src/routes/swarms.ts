@@ -2,6 +2,7 @@ import { Router, Request, Response } from 'express';
 import { randomUUID } from 'crypto';
 import { z } from 'zod';
 import { getDb } from '../lib/db';
+import { startSwarm } from '../coordinator';
 
 export const swarmsRouter = Router();
 
@@ -95,4 +96,21 @@ swarmsRouter.get('/', (_req: Request, res: Response) => {
   const db = getDb();
   const swarms = db.prepare('SELECT * FROM swarms ORDER BY created_at DESC').all();
   res.json(swarms);
+});
+
+// POST /swarms/:id/start — start swarm execution and auto-hire agents as needed
+swarmsRouter.post('/:id/start', async (req: Request, res: Response) => {
+  try {
+    const swarmId = String(req.params.id);
+    const result = await startSwarm(swarmId);
+    res.status(202).json(result);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'failed_to_start_swarm';
+    if (message.includes('Swarm not found')) {
+      res.status(404).json({ error: 'swarm_not_found' });
+      return;
+    }
+
+    res.status(500).json({ error: 'failed_to_start_swarm' });
+  }
 });
