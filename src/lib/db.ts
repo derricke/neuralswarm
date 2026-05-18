@@ -1,4 +1,5 @@
 import Database from 'better-sqlite3';
+import { randomUUID } from 'crypto';
 import path from 'path';
 import { logger } from './logger';
 
@@ -68,6 +69,18 @@ function runMigrations(db: Database.Database) {
       updated_at  INTEGER NOT NULL DEFAULT (unixepoch())
     );
 
+    CREATE TABLE IF NOT EXISTS global_jobs (
+      id                    TEXT PRIMARY KEY,
+      title                 TEXT NOT NULL,
+      description           TEXT,
+      required_capabilities TEXT DEFAULT '[]',
+      provider              TEXT NOT NULL,
+      model                 TEXT NOT NULL,
+      system_prompt         TEXT NOT NULL,
+      created_at            INTEGER NOT NULL DEFAULT (unixepoch()),
+      updated_at            INTEGER NOT NULL DEFAULT (unixepoch())
+    );
+
     CREATE TABLE IF NOT EXISTS agents (
       id                   TEXT PRIMARY KEY,
       swarm_id             TEXT NOT NULL REFERENCES swarms(id) ON DELETE CASCADE,
@@ -88,6 +101,7 @@ function runMigrations(db: Database.Database) {
       CREATE TABLE IF NOT EXISTS swarm_jobs (
         id                   TEXT PRIMARY KEY,
         swarm_id             TEXT NOT NULL REFERENCES swarms(id) ON DELETE CASCADE,
+        global_job_id        TEXT REFERENCES global_jobs(id) ON DELETE SET NULL,
         title                TEXT NOT NULL,
         description          TEXT,
         required_capabilities TEXT DEFAULT '[]',
@@ -220,7 +234,9 @@ function runMigrations(db: Database.Database) {
     CREATE INDEX IF NOT EXISTS idx_webhooks_active ON webhooks(active);
     CREATE INDEX IF NOT EXISTS idx_webhook_deliveries_webhook ON webhook_deliveries(webhook_id);
     CREATE INDEX IF NOT EXISTS idx_webhook_deliveries_created ON webhook_deliveries(created_at);
+    CREATE INDEX IF NOT EXISTS idx_global_jobs_title ON global_jobs(title);
       CREATE INDEX IF NOT EXISTS idx_swarm_jobs_swarm ON swarm_jobs(swarm_id);
+      CREATE INDEX IF NOT EXISTS idx_swarm_jobs_global_job ON swarm_jobs(global_job_id);
       CREATE INDEX IF NOT EXISTS idx_agents_job ON agents(job_id);
       CREATE INDEX IF NOT EXISTS idx_tasks_required_job ON tasks(required_job);
   `);
@@ -228,9 +244,73 @@ function runMigrations(db: Database.Database) {
   ensureColumnExists(db, 'tasks', 'required_job', 'TEXT REFERENCES swarm_jobs(id)');
   ensureColumnExists(db, 'agents', 'job_id', 'TEXT REFERENCES swarm_jobs(id)');
   ensureColumnExists(db, 'trajectories', 'job_id', 'TEXT REFERENCES swarm_jobs(id)');
+  ensureColumnExists(db, 'swarm_jobs', 'global_job_id', 'TEXT REFERENCES global_jobs(id) ON DELETE SET NULL');
   ensureColumnExists(db, 'swarm_jobs', 'tasks_assigned', 'INTEGER NOT NULL DEFAULT 0');
   ensureColumnExists(db, 'swarm_jobs', 'tasks_completed', 'INTEGER NOT NULL DEFAULT 0');
   ensureColumnExists(db, 'swarm_jobs', 'tasks_failed', 'INTEGER NOT NULL DEFAULT 0');
+
+  backfillGlobalJobs(db);
+}
+
+function backfillGlobalJobs(db: Database.Database) {
+  const rows = db
+    .prepare(
+      `SELECT id, title, description, required_capabilities, provider, model, system_prompt
+       FROM swarm_jobs
+       WHERE global_job_id IS NULL`
+    )
+    .all() as Array<{
+    id: string;
+    title: string;
+    description: string | null;
+    required_capabilities: string | null;
+    provider: string;
+    model: string;
+    system_prompt: string;
+  }>;
+
+  if (rows.length === 0) {
+    return;
+  }
+
+  const findGlobal = db.prepare(
+    `SELECT id FROM global_jobs
+     WHERE title = ? AND provider = ? AND model = ? AND system_prompt = ?
+     LIMIT 1`
+  );
+  const insertGlobal = db.prepare(
+    `INSERT INTO global_jobs (id, title, description, required_capabilities, provider, model, system_prompt, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, unixepoch(), unixepoch())`
+  );
+  const linkSwarmJob = db.prepare('UPDATE swarm_jobs SET global_job_id = ? WHERE id = ?');
+
+  const tx = db.transaction(() => {
+    for (const row of rows) {
+      const existing = findGlobal.get(
+        row.title,
+        row.provider,
+        row.model,
+        row.system_prompt
+      ) as { id: string } | undefined;
+
+      const globalId = existing?.id ?? randomUUID();
+      if (!existing) {
+        insertGlobal.run(
+          globalId,
+          row.title,
+          row.description,
+          row.required_capabilities ?? '[]',
+          row.provider,
+          row.model,
+          row.system_prompt
+        );
+      }
+
+      linkSwarmJob.run(globalId, row.id);
+    }
+  });
+
+  tx();
 }
 
 function ensureColumnExists(

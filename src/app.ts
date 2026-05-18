@@ -72,7 +72,7 @@ export function createApp() {
   app.use('/webhooks', webhooksRouter);
   app.use('/batch', batchRouter);
   app.use('/diagnostics', diagnosticsRouter);
-    app.use('/swarms', jobsRouter);
+  app.use('/', jobsRouter);
 
   // 404 handler
   app.use((_req: Request, res: Response) => {

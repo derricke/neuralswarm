@@ -37,8 +37,22 @@ tasksRouter.post('/', (req: Request, res: Response) => {
 
   if (required_job) {
     const job = db
-      .prepare('SELECT id FROM swarm_jobs WHERE swarm_id = ? AND (id = ? OR title = ?)')
-      .get(swarm_id, required_job, required_job) as { id: string } | undefined;
+      .prepare(
+        `SELECT sj.id
+         FROM swarm_jobs sj
+         LEFT JOIN global_jobs g ON g.id = sj.global_job_id
+         WHERE sj.swarm_id = ?
+           AND (
+             sj.id = ? OR
+             sj.title = ? OR
+             sj.global_job_id = ? OR
+             g.title = ?
+           )
+         LIMIT 1`
+      )
+      .get(swarm_id, required_job, required_job, required_job, required_job) as
+      | { id: string }
+      | undefined;
     if (!job) {
       res.status(404).json({ error: 'job_not_found' });
       return;

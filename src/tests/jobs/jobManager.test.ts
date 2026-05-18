@@ -82,7 +82,7 @@ describe('Jobs API', () => {
   function createTestApp() {
     const app = express();
     app.use(express.json());
-    app.use('/swarms', jobsRouter);
+    app.use('/', jobsRouter);
     return app;
   }
 
@@ -90,8 +90,8 @@ describe('Jobs API', () => {
     const app = createTestApp();
     const swarmId = insertSwarm();
 
-    const createRes = await request(app)
-      .post(`/swarms/${swarmId}/jobs`)
+    const createGlobalRes = await request(app)
+      .post('/jobs')
       .send({
         title: 'analyst',
         description: 'Analyzes requirements',
@@ -101,8 +101,16 @@ describe('Jobs API', () => {
         system_prompt: 'Analyze trade-offs',
       });
 
+    expect(createGlobalRes.status).toBe(201);
+    const globalJobId = createGlobalRes.body.id as string;
+
+    const createRes = await request(app)
+      .post(`/swarms/${swarmId}/jobs`)
+      .send({ global_job_id: globalJobId });
+
     expect(createRes.status).toBe(201);
     expect(createRes.body.title).toBe('analyst');
+    expect(createRes.body.global_job_id).toBe(globalJobId);
     const jobId = createRes.body.id as string;
 
     const listRes = await request(app).get(`/swarms/${swarmId}/jobs`);
@@ -139,14 +147,20 @@ describe('Jobs API', () => {
     const app = createTestApp();
     const swarmId = insertSwarm();
 
-    const createJobRes = await request(app)
-      .post(`/swarms/${swarmId}/jobs`)
+    const createGlobalRes = await request(app)
+      .post('/jobs')
       .send({
         title: 'coder',
         provider: 'openai',
         model: 'gpt-4o',
         system_prompt: 'Write robust code',
       });
+
+    expect(createGlobalRes.status).toBe(201);
+
+    const createJobRes = await request(app)
+      .post(`/swarms/${swarmId}/jobs`)
+      .send({ global_job_id: createGlobalRes.body.id });
 
     expect(createJobRes.status).toBe(201);
     const jobId = createJobRes.body.id as string;

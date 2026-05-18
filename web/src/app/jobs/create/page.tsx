@@ -2,17 +2,21 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
-import {
-  type JobTemplate,
-  type Provider,
-  PROVIDERS,
-  loadJobTemplates,
-  saveJobTemplates,
-  upsertJobTemplate,
-  templateKey,
-} from '@/lib/jobTemplates';
+import { fetchJson } from '@/lib/api';
 
 type SubmitState = 'idle' | 'loading' | 'success' | 'error';
+type Provider = 'openai' | 'anthropic' | 'google' | 'ollama';
+
+type GlobalJob = {
+  id: string;
+  title: string;
+  description?: string;
+  provider: Provider;
+  model: string;
+  system_prompt: string;
+};
+
+const PROVIDERS: Provider[] = ['openai', 'anthropic', 'google', 'ollama'];
 
 export default function CreateJobPage() {
   const searchParams = useSearchParams();
@@ -24,7 +28,7 @@ export default function CreateJobPage() {
   const [model, setModel] = useState('gpt-4o');
   const [systemPrompt, setSystemPrompt] = useState('You are a coding specialist.');
 
-  const [templates, setTemplates] = useState<JobTemplate[]>([]);
+  const [jobs, setJobs] = useState<GlobalJob[]>([]);
   const [state, setState] = useState<SubmitState>('idle');
   const [message, setMessage] = useState('');
 
@@ -34,10 +38,12 @@ export default function CreateJobPage() {
   );
 
   useEffect(() => {
-    setTemplates(loadJobTemplates());
+    fetchJson<{ jobs: GlobalJob[] }>('/jobs')
+      .then((result) => setJobs(result.jobs))
+      .catch(() => setJobs([]));
   }, []);
 
-  function handleSave(e: React.FormEvent) {
+  async function handleSave(e: React.FormEvent) {
     e.preventDefault();
 
     if (!canSave) {
@@ -49,7 +55,7 @@ export default function CreateJobPage() {
     setState('loading');
     setMessage('');
 
-    const payload: JobTemplate = {
+    const payload = {
       title: title.trim(),
       description: description.trim(),
       provider,
@@ -57,11 +63,20 @@ export default function CreateJobPage() {
       system_prompt: systemPrompt.trim(),
     };
 
-    const next = upsertJobTemplate(templates, payload);
-    setTemplates(next);
-    saveJobTemplates(next);
-    setMessage(`Saved global job "${payload.title}"`);
-    setState('success');
+    try {
+      await fetchJson<GlobalJob>('/jobs', {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      });
+
+      const result = await fetchJson<{ jobs: GlobalJob[] }>('/jobs');
+      setJobs(result.jobs);
+      setMessage(`Saved global job "${payload.title}"`);
+      setState('success');
+    } catch (err) {
+      setMessage(err instanceof Error ? err.message : 'Failed to save global job');
+      setState('error');
+    }
   }
 
   return (
@@ -122,10 +137,10 @@ export default function CreateJobPage() {
 
         <article className="formCard" style={{ marginTop: '1rem' }}>
           <div className="sectionHeader">
-            <h2>Saved global jobs</h2>
-            <span className="tag">{templates.length} total</span>
+            <h2>Global jobs</h2>
+            <span className="tag">{jobs.length} total</span>
           </div>
-          {templates.length > 0 ? (
+          {jobs.length > 0 ? (
             <table className="table">
               <thead>
                 <tr>
@@ -135,11 +150,11 @@ export default function CreateJobPage() {
                 </tr>
               </thead>
               <tbody>
-                {templates.map((template) => (
-                  <tr key={templateKey(template)}>
-                    <td>{template.title}</td>
-                    <td>{template.provider}</td>
-                    <td>{template.model}</td>
+                {jobs.map((job) => (
+                  <tr key={job.id}>
+                    <td>{job.title}</td>
+                    <td>{job.provider}</td>
+                    <td>{job.model}</td>
                   </tr>
                 ))}
               </tbody>
