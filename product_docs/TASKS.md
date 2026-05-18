@@ -133,7 +133,7 @@
   - [ ] **Learning Integration**
     - [x] Agent-type-memory recommends provider/model based on task description
     - [x] Find agent in swarm matching recommendation
-    - [ ] Update job performance metrics
+    - [x] Update job performance metrics
 
   - [x] **Tests**
     - [x] Unit tests: auto-pick logic

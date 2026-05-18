@@ -11,6 +11,9 @@ export interface SwarmJob {
   provider: string;
   model: string;
   system_prompt: string;
+  tasks_assigned: number;
+  tasks_completed: number;
+  tasks_failed: number;
   created_at: number;
   updated_at: number;
 }
@@ -190,6 +193,9 @@ function parseJobRow(row: any): SwarmJob {
     provider: row.provider,
     model: row.model,
     system_prompt: row.system_prompt,
+    tasks_assigned: Number(row.tasks_assigned ?? 0),
+    tasks_completed: Number(row.tasks_completed ?? 0),
+    tasks_failed: Number(row.tasks_failed ?? 0),
     created_at: row.created_at,
     updated_at: row.updated_at,
   };

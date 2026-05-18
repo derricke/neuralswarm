@@ -247,4 +247,47 @@ describe('Phase 3 auto-pick routing', () => {
     expect(task.status).toBe('completed');
     expect(task.agent_id).toBe(highPerformerId);
   });
+
+  it('updates swarm_jobs performance counters for assigned/completed/failed attempts', async () => {
+    const swarmId = insertSwarm();
+    const jobId = insertJob(swarmId, 'coder', 'openai', 'gpt-4o');
+    insertAgent(swarmId, jobId, 'openai', 'gpt-4o');
+
+    const db = getDb();
+
+    const successTaskId = randomUUID();
+    db.prepare(`
+      INSERT INTO tasks (id, swarm_id, description, required_job)
+      VALUES (?, ?, ?, ?)
+    `).run(successTaskId, swarmId, 'Implement endpoint', jobId);
+
+    (spawnAgent as jest.Mock).mockResolvedValueOnce({
+      provider: 'openai',
+      model: 'gpt-4o',
+      output: 'done',
+      inputTokens: 10,
+      outputTokens: 10,
+      durationMs: 50,
+    });
+
+    await runTask(successTaskId);
+
+    const failureTaskId = randomUUID();
+    db.prepare(`
+      INSERT INTO tasks (id, swarm_id, description, required_job)
+      VALUES (?, ?, ?, ?)
+    `).run(failureTaskId, swarmId, 'Write flaky test', jobId);
+
+    (spawnAgent as jest.Mock).mockRejectedValue(new Error('provider_error'));
+
+    await runTask(failureTaskId);
+
+    const metrics = db
+      .prepare('SELECT tasks_assigned, tasks_completed, tasks_failed FROM swarm_jobs WHERE id = ?')
+      .get(jobId) as { tasks_assigned: number; tasks_completed: number; tasks_failed: number };
+
+    expect(metrics.tasks_assigned).toBe(4);
+    expect(metrics.tasks_completed).toBe(1);
+    expect(metrics.tasks_failed).toBe(3);
+  });
 });
