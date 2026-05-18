@@ -45,6 +45,18 @@ agentsRouter.get('/:id', (req: Request, res: Response) => {
   res.json(agent);
 });
 
+// GET /agents?swarm_id=...
+agentsRouter.get('/', (req: Request, res: Response) => {
+  const db = getDb();
+  const swarmId = typeof req.query.swarm_id === 'string' ? req.query.swarm_id : undefined;
+
+  const agents = swarmId
+    ? db.prepare('SELECT * FROM agents WHERE swarm_id = ? ORDER BY created_at DESC').all(swarmId)
+    : db.prepare('SELECT * FROM agents ORDER BY created_at DESC').all();
+
+  res.json(agents);
+});
+
 // POST /agents/tasks/:taskId/run — execute a specific task
 agentsRouter.post('/tasks/:taskId/run', async (req: Request, res: Response) => {
   try {

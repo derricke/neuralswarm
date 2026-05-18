@@ -63,3 +63,15 @@ tasksRouter.get('/:id', (req: Request, res: Response) => {
   }
   res.json(task);
 });
+
+// GET /tasks?swarm_id=...
+tasksRouter.get('/', (req: Request, res: Response) => {
+  const db = getDb();
+  const swarmId = typeof req.query.swarm_id === 'string' ? req.query.swarm_id : undefined;
+
+  const tasks = swarmId
+    ? db.prepare('SELECT * FROM tasks WHERE swarm_id = ? ORDER BY created_at DESC').all(swarmId)
+    : db.prepare('SELECT * FROM tasks ORDER BY created_at DESC').all();
+
+  res.json(tasks);
+});
