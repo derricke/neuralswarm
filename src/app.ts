@@ -10,6 +10,7 @@ import { uiRouter } from './routes/ui';
 import { metricsRouter } from './routes/metrics';
 import { apiKeysRouter } from './routes/apiKeys';
 import { webhooksRouter } from './routes/webhooks';
+import { batchRouter } from './routes/batch';
 import { apiKeyAuth } from './middleware/auth';
 
 function sanitizeError(message: string): string {
@@ -58,6 +59,7 @@ export function createApp() {
   app.use('/metrics', metricsRouter);
   app.use('/api-keys', apiKeysRouter);
   app.use('/webhooks', webhooksRouter);
+  app.use('/batch', batchRouter);
 
   // 404 handler
   app.use((_req: Request, res: Response) => {
