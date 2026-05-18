@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { fetchJson } from '@/lib/api';
 
 type JobRow = {
@@ -32,6 +33,7 @@ type SwarmOption = {
 const PROVIDERS = ['openai', 'anthropic', 'google', 'ollama'] as const;
 
 export default function SwarmControlPage() {
+  const searchParams = useSearchParams();
   const [swarmId, setSwarmId] = useState('');
   const [swarms, setSwarms] = useState<SwarmOption[]>([]);
 
@@ -52,6 +54,13 @@ export default function SwarmControlPage() {
   const [busy, setBusy] = useState(false);
 
   const canAct = useMemo(() => swarmId.trim().length > 0, [swarmId]);
+
+  useEffect(() => {
+    const requestedSwarmId = searchParams.get('swarmId')?.trim();
+    if (requestedSwarmId) {
+      setSwarmId(requestedSwarmId);
+    }
+  }, [searchParams]);
 
   useEffect(() => {
     let mounted = true;

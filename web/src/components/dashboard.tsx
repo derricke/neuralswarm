@@ -221,9 +221,13 @@ export async function Dashboard() {
                   {swarms.slice(0, 5).map((swarm) => (
                     <tr key={swarm.id}>
                       <td>
-                        <div className="listTitle">{swarm.name}</div>
+                        <a className="listTitle" href={`/swarms/control?swarmId=${encodeURIComponent(swarm.id)}`}>
+                          {swarm.name}
+                        </a>
                       </td>
-                      <td className="mono">{swarm.id.slice(0, 8)}…</td>
+                      <td className="mono">
+                        <a href={`/swarms/control?swarmId=${encodeURIComponent(swarm.id)}`}>{swarm.id.slice(0, 8)}…</a>
+                      </td>
                       <td>{formatDate(swarm.created_at)}</td>
                     </tr>
                   ))}
