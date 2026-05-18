@@ -42,6 +42,7 @@ At least one LLM provider API key must be configured:
 - SQLite database file path
 - Default: `./data/neuralswarm.db` (created automatically)
 - Type: string (file path)
+- Blank/whitespace values are treated as unset and fall back to `./data/neuralswarm.db`
 - Special values: `:memory:` for in-memory (testing only)
 - Example: `/var/data/swarm.db` or `:memory:`
 
@@ -64,6 +65,8 @@ At least one LLM provider API key must be configured:
 - Type: string
 - Example: `your-generated-api-key`
 - Note: This value is exposed to the browser because it is `NEXT_PUBLIC_*`; use only for local/dev setups
+- Runtime behavior: The frontend prefers a browser-stored key (`localStorage`) over this env var
+- Recovery behavior: On `401` + `Invalid or expired API key`, the frontend clears the stored key and retries once
 
 ## Setup Examples
 
@@ -156,6 +159,12 @@ curl http://localhost:3000/metrics
 - Check that the env var is set: `echo $ANTHROPIC_API_KEY`
 - Make sure it's in the `.env` file if using it
 - Restart the app after setting env vars
+
+### "Invalid or expired API key" from frontend
+
+- Generate a fresh backend key: `curl -s -X POST http://localhost:3000/api-keys -H "Content-Type: application/json" -d '{"name":"frontend-dev"}'`
+- Paste the returned `key` into the API key field in the web UI
+- If `DATABASE_URL` is blank in `.env.local`, backend now falls back to `./data/neuralswarm.db`; restart backend if needed
 
 ### "Failed to create message" (Anthropic)
 
