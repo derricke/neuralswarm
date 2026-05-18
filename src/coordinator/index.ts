@@ -12,6 +12,7 @@ const MAX_RETRIES = 3;
 type AgentRow = {
   id: string;
   swarm_id: string;
+  job_id: string | null;
   provider: AgentProvider;
   model: string;
   status: string;
@@ -27,11 +28,21 @@ type TaskRow = {
   id: string;
   swarm_id: string;
   agent_id: string | null;
+  required_job: string | null;
   description: string;
   status: string;
   retries: number;
   result: string | null;
   error: string | null;
+};
+
+type JobRow = {
+  id: string;
+  swarm_id: string;
+  title: string;
+  provider: AgentProvider;
+  model: string;
+  system_prompt: string;
 };
 
 type ProviderBlacklistRow = {
@@ -52,15 +63,26 @@ export async function runTask(taskId: string): Promise<void> {
   db.prepare(`UPDATE tasks SET status = 'running', updated_at = unixepoch() WHERE id = ?`).run(taskId);
 
   let attempt = task.retries;
+  const requiredJob = task.required_job ? getJobById(task.required_job, task.swarm_id) : null;
+
+  if (task.required_job && !requiredJob) {
+    db.prepare(
+      `UPDATE tasks SET status = 'failed', error = ?, updated_at = unixepoch() WHERE id = ?`
+    ).run('job_not_found', taskId);
+    logger.warn({ taskId, requiredJobId: task.required_job }, 'required job not found');
+    return;
+  }
 
   while (attempt < MAX_RETRIES) {
-    const agent = pickAgent(task.swarm_id, attempt > 0 ? task.agent_id : null, recommendation);
+    const agent = task.required_job
+      ? routeTaskWithJob(task, attempt > 0 ? task.agent_id : null)
+      : pickAgent(task.swarm_id, attempt > 0 ? task.agent_id : null, recommendation);
 
     if (!agent) {
       db.prepare(
         `UPDATE tasks SET status = 'failed', error = ?, updated_at = unixepoch() WHERE id = ?`
-      ).run('no_available_agent', taskId);
-      logger.warn({ taskId }, 'no available agent');
+      ).run(task.required_job ? 'no_agents_for_job' : 'no_available_agent', taskId);
+      logger.warn({ taskId, requiredJobId: task.required_job }, 'no available agent');
       return;
     }
 
@@ -75,11 +97,12 @@ export async function runTask(taskId: string): Promise<void> {
     try {
       // Load agent type profile (learned traits)
       const typeProfile = await getOrCreateAgentTypeProfile(agent.provider, agent.model);
+      const job = agent.job_id ? getJobById(agent.job_id, task.swarm_id) : null;
 
       const config: AgentConfig = {
         provider: agent.provider,
         model: agent.model,
-        systemPrompt: typeProfile.best_system_prompt ?? undefined,
+        systemPrompt: job?.system_prompt ?? typeProfile.best_system_prompt ?? undefined,
         temperature: typeProfile.temperature,
         maxTokens: typeProfile.top_k_tokens,
       };
@@ -110,6 +133,7 @@ export async function runTask(taskId: string): Promise<void> {
         agentId: agent.id,
         provider: agent.provider,
         model: agent.model,
+        jobId: agent.job_id,
         description: task.description,
         result: result.output,
         success: true,
@@ -149,6 +173,7 @@ export async function runTask(taskId: string): Promise<void> {
         agentId: agent.id,
         provider: agent.provider,
         model: agent.model,
+        jobId: agent.job_id,
         description: task.description,
         result: null,
         success: false,
@@ -205,6 +230,51 @@ function pickAgent(
   return eligible.sort((a, b) => b.health_score - a.health_score)[0];
 }
 
+export function routeTaskWithJob(task: TaskRow, excludeAgentId: string | null): AgentRow | undefined {
+  if (!task.required_job) return undefined;
+
+  const job = getJobById(task.required_job, task.swarm_id);
+  if (!job) return undefined;
+
+  return pickAgentForJob(task.swarm_id, job.id, excludeAgentId);
+}
+
+function pickAgentForJob(
+  swarmId: string,
+  jobId: string,
+  excludeAgentId: string | null
+): AgentRow | undefined {
+  const db = getDb();
+  const now = Math.floor(Date.now() / 1000);
+
+  const blacklisted = db
+    .prepare(`SELECT provider FROM provider_blacklist WHERE blacklisted_until > ?`)
+    .all(now) as ProviderBlacklistRow[];
+
+  const blacklistedProviders = blacklisted.map((b) => b.provider);
+
+  const candidates = db
+    .prepare(`SELECT * FROM agents WHERE swarm_id = ? AND job_id = ? AND status = 'idle'`)
+    .all(swarmId, jobId) as AgentRow[];
+
+  const eligible = candidates.filter(
+    (a) => !blacklistedProviders.includes(a.provider) && a.id !== excludeAgentId && !isFired(a)
+  );
+
+  if (eligible.length === 0) return undefined;
+
+  return eligible.sort((a, b) => b.health_score - a.health_score)[0];
+}
+
+function getJobById(jobId: string, swarmId: string): JobRow | null {
+  const db = getDb();
+  const job = db
+    .prepare(`SELECT id, swarm_id, title, provider, model, system_prompt FROM swarm_jobs WHERE id = ? AND swarm_id = ?`)
+    .get(jobId, swarmId) as JobRow | undefined;
+
+  return job ?? null;
+}
+
 function isFired(agent: AgentRow): boolean {
   // Fire signal 1: >50% failure rate over ≥100 tasks
   if (agent.tasks_assigned >= 100) {
@@ -253,12 +323,13 @@ export function blacklistProvider(provider: AgentProvider, reason: string): void
 export function registerAgent(
   swarmId: string,
   provider: AgentProvider,
-  model: string
+  model: string,
+  jobId?: string
 ): string {
   const db = getDb();
   const id = randomUUID();
   db.prepare(
-    `INSERT INTO agents (id, swarm_id, provider, model) VALUES (?, ?, ?, ?)`
-  ).run(id, swarmId, provider, model);
+    `INSERT INTO agents (id, swarm_id, provider, model, job_id) VALUES (?, ?, ?, ?, ?)`
+  ).run(id, swarmId, provider, model, jobId ?? null);
   return id;
 }

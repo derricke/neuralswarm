@@ -12,6 +12,7 @@ import { apiKeysRouter } from './routes/apiKeys';
 import { webhooksRouter } from './routes/webhooks';
 import { batchRouter } from './routes/batch';
 import { diagnosticsRouter } from './routes/diagnostics';
+import jobsRouter from './routes/jobs';
 import { apiKeyAuth } from './middleware/auth';
 import { requestTracing } from './middleware/tracing';
 import { createRateLimiter } from './middleware/rateLimiter';
@@ -70,6 +71,7 @@ export function createApp() {
   app.use('/webhooks', webhooksRouter);
   app.use('/batch', batchRouter);
   app.use('/diagnostics', diagnosticsRouter);
+    app.use('/swarms', jobsRouter);
 
   // 404 handler
   app.use((_req: Request, res: Response) => {

@@ -10,6 +10,7 @@ const RegisterAgentSchema = z.object({
   swarm_id: z.string().uuid(),
   provider: z.enum(['anthropic', 'openai', 'google', 'ollama']),
   model: z.string().min(1),
+  job_id: z.string().uuid().optional(),
 });
 
 // POST /agents — register an agent in a swarm
@@ -20,7 +21,7 @@ agentsRouter.post('/', (req: Request, res: Response) => {
     return;
   }
 
-  const { swarm_id, provider, model } = parsed.data;
+  const { swarm_id, provider, model, job_id } = parsed.data;
   const db = getDb();
 
   const swarm = db.prepare('SELECT id FROM swarms WHERE id = ?').get(swarm_id);
@@ -29,7 +30,17 @@ agentsRouter.post('/', (req: Request, res: Response) => {
     return;
   }
 
-  const agentId = registerAgent(swarm_id, provider, model);
+  if (job_id) {
+    const job = db
+      .prepare('SELECT id FROM swarm_jobs WHERE id = ? AND swarm_id = ?')
+      .get(job_id, swarm_id);
+    if (!job) {
+      res.status(404).json({ error: 'job_not_found' });
+      return;
+    }
+  }
+
+  const agentId = registerAgent(swarm_id, provider, model, job_id);
   const agent = db.prepare('SELECT * FROM agents WHERE id = ?').get(agentId);
   res.status(201).json(agent);
 });
