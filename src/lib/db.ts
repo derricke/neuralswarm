@@ -110,6 +110,25 @@ function runMigrations(db: Database.Database) {
       created_at   INTEGER NOT NULL DEFAULT (unixepoch())
     );
 
+    CREATE TABLE IF NOT EXISTS trajectory_archive (
+      id                    TEXT PRIMARY KEY,
+      original_trajectory_id TEXT NOT NULL UNIQUE,
+      task_id               TEXT NOT NULL,
+      swarm_id              TEXT NOT NULL,
+      agent_id              TEXT,
+      job_id                TEXT,
+      provider              TEXT NOT NULL,
+      model                 TEXT NOT NULL,
+      description           TEXT NOT NULL,
+      result                TEXT,
+      success               INTEGER NOT NULL DEFAULT 0,
+      retries               INTEGER NOT NULL DEFAULT 0,
+      duration_ms           INTEGER NOT NULL DEFAULT 0,
+      embedding             BLOB,
+      created_at            INTEGER NOT NULL,
+      archived_at           INTEGER NOT NULL
+    );
+
     CREATE TABLE IF NOT EXISTS agent_type_profiles (
       id                   TEXT PRIMARY KEY,
       provider             TEXT NOT NULL,
@@ -164,6 +183,8 @@ function runMigrations(db: Database.Database) {
     CREATE INDEX IF NOT EXISTS idx_trajectories_swarm ON trajectories(swarm_id);
     CREATE INDEX IF NOT EXISTS idx_trajectories_job ON trajectories(job_id);
     CREATE INDEX IF NOT EXISTS idx_trajectories_created ON trajectories(created_at);
+    CREATE INDEX IF NOT EXISTS idx_trajectory_archive_swarm ON trajectory_archive(swarm_id);
+    CREATE INDEX IF NOT EXISTS idx_trajectory_archive_archived_at ON trajectory_archive(archived_at);
     CREATE INDEX IF NOT EXISTS idx_agent_type_profiles_lookup ON agent_type_profiles(provider, model);
     CREATE INDEX IF NOT EXISTS idx_webhooks_active ON webhooks(active);
     CREATE INDEX IF NOT EXISTS idx_webhook_deliveries_webhook ON webhook_deliveries(webhook_id);

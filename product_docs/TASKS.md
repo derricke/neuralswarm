@@ -151,9 +151,9 @@
   - [x] Agent health dashboard (real-time scores, firing events)
   - [x] Database size monitoring (alert >500MB)
 
-- [ ] **Data Management**
-  - [ ] Trajectory archival job (>30 days old → archive table)
-  - [ ] Cleanup job (>90 days in archive → delete)
+- [x] **Data Management**
+  - [x] Trajectory archival job (>30 days old → archive table)
+  - [x] Cleanup job (>90 days in archive → delete)
 
 - [ ] **Documentation**
   - [ ] README: quickstart, architecture, example workflow

@@ -67,14 +67,105 @@ export function runCleanup(): { archived: number; deleted: number } {
   const now = Math.floor(Date.now() / 1000);
   const archiveCutoff = now - ARCHIVE_AGE_DAYS * 86400;
   const deleteCutoff = now - DELETE_AGE_DAYS * 86400;
+  const archivedAt = now;
+
+  const candidates = db
+    .prepare(
+      `SELECT
+        id,
+        task_id,
+        swarm_id,
+        agent_id,
+        job_id,
+        provider,
+        model,
+        description,
+        result,
+        success,
+        retries,
+        duration_ms,
+        embedding,
+        created_at,
+        archived_at
+      FROM trajectories
+      WHERE (created_at < ? AND archived_at IS NULL) OR archived_at IS NOT NULL`
+    )
+    .all(archiveCutoff) as Array<{
+    id: string;
+    task_id: string;
+    swarm_id: string;
+    agent_id: string | null;
+    job_id: string | null;
+    provider: string;
+    model: string;
+    description: string;
+    result: string | null;
+    success: number;
+    retries: number;
+    duration_ms: number;
+    embedding: Buffer | null;
+    created_at: number;
+    archived_at: number | null;
+  }>;
+
+  const insertArchive = db.prepare(
+    `INSERT OR IGNORE INTO trajectory_archive (
+      id,
+      original_trajectory_id,
+      task_id,
+      swarm_id,
+      agent_id,
+      job_id,
+      provider,
+      model,
+      description,
+      result,
+      success,
+      retries,
+      duration_ms,
+      embedding,
+      created_at,
+      archived_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+  );
+
+  const deleteActive = db.prepare(`DELETE FROM trajectories WHERE id = ?`);
+
+  const moveToArchive = db.transaction((rows: typeof candidates) => {
+    let archived = 0;
+
+    for (const row of rows) {
+      insertArchive.run(
+        randomUUID(),
+        row.id,
+        row.task_id,
+        row.swarm_id,
+        row.agent_id,
+        row.job_id,
+        row.provider,
+        row.model,
+        row.description,
+        row.result,
+        row.success,
+        row.retries,
+        row.duration_ms,
+        row.embedding,
+        row.created_at,
+        row.archived_at ?? archivedAt
+      );
+
+      deleteActive.run(row.id);
+      archived++;
+    }
+
+    return archived;
+  });
+
+  const archived = moveToArchive(candidates);
 
   const { changes: deleted } = db
-    .prepare(`DELETE FROM trajectories WHERE created_at < ?`)
+    .prepare(`DELETE FROM trajectory_archive WHERE archived_at < ?`)
     .run(deleteCutoff);
-
-  const { changes: archived } = db
-    .prepare(`UPDATE trajectories SET archived_at = unixepoch() WHERE created_at < ? AND archived_at IS NULL`)
-    .run(archiveCutoff);
 
   logger.info({ archived, deleted }, 'trajectory cleanup complete');
   return { archived, deleted };

@@ -68,7 +68,14 @@ describe('trajectoryStore', () => {
     const result = runCleanup();
     expect(result.archived).toBeGreaterThanOrEqual(1);
 
-    const record = getTrajectory(id) as Record<string, unknown>;
-    expect(record.archived_at).not.toBeNull();
+    const activeRecord = getTrajectory(id);
+    expect(activeRecord).toBeUndefined();
+
+    const archivedRecord = db
+      .prepare('SELECT original_trajectory_id, archived_at FROM trajectory_archive WHERE original_trajectory_id = ?')
+      .get(id) as { original_trajectory_id: string; archived_at: number } | undefined;
+
+    expect(archivedRecord?.original_trajectory_id).toBe(id);
+    expect(archivedRecord?.archived_at).toBeGreaterThan(0);
   });
 });
