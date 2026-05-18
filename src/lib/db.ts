@@ -100,8 +100,35 @@ function runMigrations(db: Database.Database) {
       created_at  TEXT NOT NULL DEFAULT (datetime('now'))
     );
 
+    CREATE TABLE IF NOT EXISTS webhooks (
+      id          TEXT PRIMARY KEY,
+      name        TEXT NOT NULL,
+      url         TEXT NOT NULL,
+      event_types TEXT NOT NULL,
+      active      INTEGER NOT NULL DEFAULT 1,
+      retry_count INTEGER NOT NULL DEFAULT 3,
+      timeout_ms  INTEGER NOT NULL DEFAULT 5000,
+      created_at  TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at  TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+
+    CREATE TABLE IF NOT EXISTS webhook_deliveries (
+      id          TEXT PRIMARY KEY,
+      webhook_id  TEXT NOT NULL REFERENCES webhooks(id) ON DELETE CASCADE,
+      event_type  TEXT NOT NULL,
+      payload     TEXT NOT NULL,
+      status_code INTEGER,
+      error       TEXT,
+      attempts    INTEGER NOT NULL DEFAULT 0,
+      created_at  TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at  TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_api_keys_key ON api_keys(key);
     CREATE INDEX IF NOT EXISTS idx_trajectories_swarm ON trajectories(swarm_id);
     CREATE INDEX IF NOT EXISTS idx_trajectories_created ON trajectories(created_at);
-    CREATE INDEX IF NOT EXISTS idx_api_keys_key ON api_keys(key);
+    CREATE INDEX IF NOT EXISTS idx_webhooks_active ON webhooks(active);
+    CREATE INDEX IF NOT EXISTS idx_webhook_deliveries_webhook ON webhook_deliveries(webhook_id);
+    CREATE INDEX IF NOT EXISTS idx_webhook_deliveries_created ON webhook_deliveries(created_at);
   `);
 }
