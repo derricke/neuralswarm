@@ -1,3 +1,30 @@
-product_docs
+product_docs/
+next_info.json
 .env
 .env.local
+.env.*.local
+
+# Build output
+dist/
+**/.next/
+web/.next/
+*.tsbuildinfo
+
+# Database
+data/
+
+# Dependencies
+node_modules/
+web/node_modules/
+
+# Logs
+*.log
+logs/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/settings.json
+.idea/
