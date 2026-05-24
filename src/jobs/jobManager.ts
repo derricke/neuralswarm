@@ -12,6 +12,7 @@ type JobRow = {
   provider: string;
   model: string;
   system_prompt: string;
+  mcp_servers: string | null;
   tasks_assigned: number;
   tasks_completed: number;
   tasks_failed: number;
@@ -29,6 +30,7 @@ export interface SwarmJob {
   provider: string;
   model: string;
   system_prompt: string;
+  mcpServers: Array<{ name: string; command: string; args: string[] }>;
   tasks_assigned: number;
   tasks_completed: number;
   tasks_failed: number;
@@ -44,6 +46,7 @@ export interface GlobalJob {
   provider: string;
   model: string;
   system_prompt: string;
+  mcpServers: Array<{ name: string; command: string; args: string[] }>;
   created_at: number;
   updated_at: number;
 }
@@ -55,6 +58,7 @@ export interface CreateJobInput {
   provider: string;
   model: string;
   system_prompt: string;
+  mcpServers?: Array<{ name: string; command: string; args: string[] }>;
 }
 
 function baseJobSelect(whereClause: string): string {
@@ -69,6 +73,7 @@ function baseJobSelect(whereClause: string): string {
       COALESCE(g.provider, sj.provider) AS provider,
       COALESCE(g.model, sj.model) AS model,
       COALESCE(g.system_prompt, sj.system_prompt) AS system_prompt,
+      COALESCE(g.mcp_servers, sj.mcp_servers) AS mcp_servers,
       sj.tasks_assigned,
       sj.tasks_completed,
       sj.tasks_failed,
@@ -88,8 +93,8 @@ export async function createGlobalJob(input: CreateJobInput): Promise<GlobalJob>
   db.prepare(
     `INSERT INTO global_jobs (
       id, title, description, required_capabilities,
-      provider, model, system_prompt, created_at, updated_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      provider, model, system_prompt, mcp_servers, created_at, updated_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
   ).run(
     id,
     input.title,
@@ -98,6 +103,7 @@ export async function createGlobalJob(input: CreateJobInput): Promise<GlobalJob>
     input.provider,
     input.model,
     input.system_prompt,
+    JSON.stringify(input.mcpServers || []),
     now,
     now
   );
@@ -117,6 +123,7 @@ export function listGlobalJobs(): GlobalJob[] {
     provider: row.provider,
     model: row.model,
     system_prompt: row.system_prompt,
+    mcpServers: JSON.parse(row.mcp_servers || '[]'),
     created_at: row.created_at,
     updated_at: row.updated_at,
   }));
@@ -135,6 +142,7 @@ export function getGlobalJobById(globalJobId: string): GlobalJob | null {
     provider: row.provider,
     model: row.model,
     system_prompt: row.system_prompt,
+    mcpServers: JSON.parse(row.mcp_servers || '[]'),
     created_at: row.created_at,
     updated_at: row.updated_at,
   };
@@ -161,8 +169,8 @@ export async function assignGlobalJobToSwarm(swarmId: string, globalJobId: strin
   db.prepare(
     `INSERT INTO swarm_jobs (
       id, swarm_id, global_job_id, title, description, required_capabilities,
-      provider, model, system_prompt, created_at, updated_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      provider, model, system_prompt, mcp_servers, created_at, updated_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
   ).run(
     id,
     swarmId,
@@ -173,6 +181,7 @@ export async function assignGlobalJobToSwarm(swarmId: string, globalJobId: strin
     globalJob.provider,
     globalJob.model,
     globalJob.system_prompt,
+    JSON.stringify(globalJob.mcpServers || []),
     now,
     now
   );
@@ -338,6 +347,7 @@ function parseJobRow(row: any): SwarmJob {
     provider: row.provider,
     model: row.model,
     system_prompt: row.system_prompt,
+    mcpServers: JSON.parse(row.mcp_servers || '[]'),
     tasks_assigned: Number(row.tasks_assigned ?? 0),
     tasks_completed: Number(row.tasks_completed ?? 0),
     tasks_failed: Number(row.tasks_failed ?? 0),

@@ -8,17 +8,23 @@ export async function runOpenAIAgent(
   const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
   const start = Date.now();
 
-  const response = await client.chat.completions.create({
-    model: config.model,
-    max_tokens: config.maxTokens ?? 1024,
-    messages: [
-      {
-        role: 'system',
-        content: config.systemPrompt ?? 'You are a helpful assistant. Complete the task concisely.',
-      },
-      { role: 'user', content: task },
-    ],
-  });
+  let response;
+  try {
+    response = await client.chat.completions.create({
+      model: config.model,
+      max_tokens: config.maxTokens ?? 1024,
+      messages: [
+        {
+          role: 'system',
+          content: config.systemPrompt ?? 'You are a helpful assistant. Complete the task concisely.',
+        },
+        { role: 'user', content: task },
+      ],
+      user: 'neuralswarm-agent',
+    });
+  } catch (error) {
+    throw new Error(`OpenAI API Error: ${error instanceof Error ? error.message : String(error)}`);
+  }
 
   const output = response.choices[0]?.message?.content ?? '';
   const usage = response.usage;

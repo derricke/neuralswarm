@@ -1,5 +1,7 @@
 import Anthropic from '@anthropic-ai/sdk';
 import type { AgentConfig, AgentResult } from '../types';
+import { connectMcpServers, getMcpTools, executeMcpTool, disconnectMcpServers, McpClientMap } from '../mcp';
+import { logger } from '../../lib/logger';
 
 export async function runAnthropicAgent(
   task: string,
@@ -8,22 +10,111 @@ export async function runAnthropicAgent(
   const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
   const start = Date.now();
 
-  const response = await client.messages.create({
-    model: config.model,
-    max_tokens: config.maxTokens ?? 1024,
-    system: config.systemPrompt ?? 'You are a helpful assistant. Complete the task concisely.',
-    messages: [{ role: 'user', content: task }],
-  });
+  let mcpClients: McpClientMap = {};
+  let tools: any[] = [];
 
-  const textBlock = response.content.find((b) => b.type === 'text');
-  const output = textBlock && textBlock.type === 'text' ? textBlock.text : '';
+  if (config.mcpServers && config.mcpServers.length > 0) {
+    mcpClients = await connectMcpServers(config.mcpServers);
+    tools = await getMcpTools(mcpClients);
+  }
+
+  let messages: Anthropic.MessageParam[] = [{ role: 'user', content: task }];
+  let totalInputTokens = 0;
+  let totalOutputTokens = 0;
+  let output = '';
+
+  try {
+    while (true) {
+      const createOptions: Anthropic.MessageCreateParamsNonStreaming = {
+        model: config.model,
+        max_tokens: config.maxTokens ?? 1024,
+        system: config.systemPrompt ?? 'You are a helpful assistant. Complete the task concisely.',
+        messages,
+        metadata: { user_id: 'neuralswarm-agent' },
+      };
+
+      if (tools.length > 0) {
+        createOptions.tools = tools;
+      }
+
+      let response;
+      try {
+        response = await client.messages.create(createOptions);
+      } catch (error) {
+        throw new Error(`Anthropic API Error: ${error instanceof Error ? error.message : String(error)}`);
+      }
+
+      totalInputTokens += response.usage.input_tokens;
+      totalOutputTokens += response.usage.output_tokens;
+
+      messages.push({
+        role: 'assistant',
+        content: response.content,
+      });
+
+      if (response.stop_reason === 'tool_use') {
+        const toolResults: Anthropic.ToolResultBlockParam[] = [];
+
+        for (const block of response.content) {
+          if (block.type === 'tool_use') {
+            try {
+              const result = await executeMcpTool(mcpClients, block.name, block.input);
+              
+              let toolOutput = '';
+              let isError = false;
+              if (result && result.content && Array.isArray(result.content)) {
+                toolOutput = result.content.map((c: any) => c.text || JSON.stringify(c)).join('\n');
+                isError = result.isError || false;
+              } else {
+                toolOutput = typeof result === 'string' ? result : JSON.stringify(result);
+              }
+
+              toolResults.push({
+                type: 'tool_result',
+                tool_use_id: block.id,
+                content: toolOutput,
+                is_error: isError,
+              });
+            } catch (err) {
+              toolResults.push({
+                type: 'tool_result',
+                tool_use_id: block.id,
+                content: `Error: ${err instanceof Error ? err.message : String(err)}`,
+                is_error: true,
+              });
+            }
+          }
+        }
+
+        if (toolResults.length > 0) {
+          messages.push({
+            role: 'user',
+            content: toolResults,
+          });
+          continue; // Loop again
+        }
+      }
+
+      if (response.stop_reason === 'end_turn' || response.stop_reason === 'stop_sequence') {
+        const textBlock = response.content.find((b) => b.type === 'text');
+        output = textBlock && textBlock.type === 'text' ? textBlock.text : '';
+        break;
+      }
+
+      throw new Error(`Anthropic API unexpectedly stopped: ${response.stop_reason}`);
+    }
+  } finally {
+    if (Object.keys(mcpClients).length > 0) {
+      await disconnectMcpServers(mcpClients);
+    }
+  }
 
   return {
     provider: 'anthropic',
     model: config.model,
     output,
-    inputTokens: response.usage.input_tokens,
-    outputTokens: response.usage.output_tokens,
+    inputTokens: totalInputTokens,
+    outputTokens: totalOutputTokens,
     durationMs: Date.now() - start,
   };
 }

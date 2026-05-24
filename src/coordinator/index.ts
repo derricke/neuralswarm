@@ -50,6 +50,7 @@ type JobRow = {
   provider: AgentProvider;
   model: string;
   system_prompt: string;
+  mcp_servers: string | null;
 };
 
 type StartSwarmResult = {
@@ -152,6 +153,7 @@ export async function runTask(taskId: string): Promise<void> {
         systemPrompt: job?.system_prompt ?? typeProfile.best_system_prompt ?? undefined,
         temperature: typeProfile.temperature,
         maxTokens: typeProfile.top_k_tokens,
+        mcpServers: job?.mcp_servers ? JSON.parse(job.mcp_servers) : undefined,
       };
 
       const taskStart = Date.now();
@@ -420,7 +422,8 @@ function getJobById(jobId: string, swarmId: string): JobRow | null {
         COALESCE(g.title, sj.title) AS title,
         COALESCE(g.provider, sj.provider) AS provider,
         COALESCE(g.model, sj.model) AS model,
-        COALESCE(g.system_prompt, sj.system_prompt) AS system_prompt
+        COALESCE(g.system_prompt, sj.system_prompt) AS system_prompt,
+        COALESCE(g.mcp_servers, sj.mcp_servers) AS mcp_servers
       FROM swarm_jobs sj
       LEFT JOIN global_jobs g ON g.id = sj.global_job_id
       WHERE sj.id = ? AND sj.swarm_id = ?`
@@ -451,7 +454,8 @@ async function hireAgentsForSwarm(
         COALESCE(g.title, sj.title) AS title,
         COALESCE(g.provider, sj.provider) AS provider,
         COALESCE(g.model, sj.model) AS model,
-        COALESCE(g.system_prompt, sj.system_prompt) AS system_prompt
+        COALESCE(g.system_prompt, sj.system_prompt) AS system_prompt,
+        COALESCE(g.mcp_servers, sj.mcp_servers) AS mcp_servers
       FROM swarm_jobs sj
       LEFT JOIN global_jobs g ON g.id = sj.global_job_id
       WHERE sj.swarm_id = ?`

@@ -6,6 +6,11 @@ export type AgentConfig = {
   systemPrompt?: string;
   maxTokens?: number;
   temperature?: number;
+  mcpServers?: Array<{
+    name: string;
+    command: string;
+    args: string[];
+  }>;
 };
 
 export type AgentResult = {

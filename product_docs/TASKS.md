@@ -181,3 +181,7 @@
 - [ ] Advanced GOAP A* planning
 - [ ] Web UI theme customization
 - [ ] Agent federation (Slack-like cross-machine comms)
+- [ ] **Model Context Protocol (MCP) Integration:** Build an MCP client adapter for short-lived workers to use local tools (files, DB).
+- [ ] **Live Trajectory UI:** Implement SSE (Server-Sent Events) in the Express API and a live scrolling dashboard in the Next.js UI to stream agent reasoning.
+- [ ] **Economy Routing:** Add logic for the Coordinator to attempt cheaper models (Ollama/Haiku) before falling back to expensive models upon failure.
+- [ ] **Prompt Auto-refinement:** Use the Learning Engine to periodically summarize successful trajectories and propose optimizations for Job system prompts.

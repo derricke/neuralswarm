@@ -74,6 +74,7 @@ function runMigrations(db: Database.Database) {
       title                 TEXT NOT NULL,
       description           TEXT,
       required_capabilities TEXT DEFAULT '[]',
+      mcp_servers           TEXT DEFAULT '[]',
       provider              TEXT NOT NULL,
       model                 TEXT NOT NULL,
       system_prompt         TEXT NOT NULL,
@@ -105,6 +106,7 @@ function runMigrations(db: Database.Database) {
         title                TEXT NOT NULL,
         description          TEXT,
         required_capabilities TEXT DEFAULT '[]',
+        mcp_servers          TEXT DEFAULT '[]',
         provider             TEXT NOT NULL,
         model                TEXT NOT NULL,
         system_prompt        TEXT NOT NULL,
@@ -236,9 +238,6 @@ function runMigrations(db: Database.Database) {
     CREATE INDEX IF NOT EXISTS idx_webhook_deliveries_created ON webhook_deliveries(created_at);
     CREATE INDEX IF NOT EXISTS idx_global_jobs_title ON global_jobs(title);
       CREATE INDEX IF NOT EXISTS idx_swarm_jobs_swarm ON swarm_jobs(swarm_id);
-      CREATE INDEX IF NOT EXISTS idx_swarm_jobs_global_job ON swarm_jobs(global_job_id);
-      CREATE INDEX IF NOT EXISTS idx_agents_job ON agents(job_id);
-      CREATE INDEX IF NOT EXISTS idx_tasks_required_job ON tasks(required_job);
   `);
 
   ensureColumnExists(db, 'tasks', 'required_job', 'TEXT REFERENCES swarm_jobs(id)');
@@ -248,6 +247,14 @@ function runMigrations(db: Database.Database) {
   ensureColumnExists(db, 'swarm_jobs', 'tasks_assigned', 'INTEGER NOT NULL DEFAULT 0');
   ensureColumnExists(db, 'swarm_jobs', 'tasks_completed', 'INTEGER NOT NULL DEFAULT 0');
   ensureColumnExists(db, 'swarm_jobs', 'tasks_failed', 'INTEGER NOT NULL DEFAULT 0');
+  ensureColumnExists(db, 'global_jobs', 'mcp_servers', "TEXT DEFAULT '[]'");
+  ensureColumnExists(db, 'swarm_jobs', 'mcp_servers', "TEXT DEFAULT '[]'");
+
+  db.exec(`
+    CREATE INDEX IF NOT EXISTS idx_swarm_jobs_global_job ON swarm_jobs(global_job_id);
+    CREATE INDEX IF NOT EXISTS idx_agents_job ON agents(job_id);
+    CREATE INDEX IF NOT EXISTS idx_tasks_required_job ON tasks(required_job);
+  `);
 
   backfillGlobalJobs(db);
 }
@@ -255,7 +262,7 @@ function runMigrations(db: Database.Database) {
 function backfillGlobalJobs(db: Database.Database) {
   const rows = db
     .prepare(
-      `SELECT id, title, description, required_capabilities, provider, model, system_prompt
+      `SELECT id, title, description, required_capabilities, provider, model, system_prompt, mcp_servers
        FROM swarm_jobs
        WHERE global_job_id IS NULL`
     )
@@ -267,6 +274,7 @@ function backfillGlobalJobs(db: Database.Database) {
     provider: string;
     model: string;
     system_prompt: string;
+    mcp_servers: string | null;
   }>;
 
   if (rows.length === 0) {
@@ -279,8 +287,8 @@ function backfillGlobalJobs(db: Database.Database) {
      LIMIT 1`
   );
   const insertGlobal = db.prepare(
-    `INSERT INTO global_jobs (id, title, description, required_capabilities, provider, model, system_prompt, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, unixepoch(), unixepoch())`
+    `INSERT INTO global_jobs (id, title, description, required_capabilities, provider, model, system_prompt, mcp_servers, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, unixepoch(), unixepoch())`
   );
   const linkSwarmJob = db.prepare('UPDATE swarm_jobs SET global_job_id = ? WHERE id = ?');
 
@@ -302,7 +310,8 @@ function backfillGlobalJobs(db: Database.Database) {
           row.required_capabilities ?? '[]',
           row.provider,
           row.model,
-          row.system_prompt
+          row.system_prompt,
+          row.mcp_servers ?? '[]'
         );
       }
 
