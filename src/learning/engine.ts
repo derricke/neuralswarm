@@ -31,9 +31,7 @@ class LearningEngine {
     private readonly maxElements = DEFAULT_MAX_ELEMENTS
   ) {}
 
-  async initialize(): Promise<void> {
-    if (this.initialized) return;
-
+  rebuildFromDatabase(): void {
     const rows = getDb()
       .prepare(
         `SELECT id, swarm_id, provider, model, description, result, success, embedding
@@ -43,6 +41,9 @@ class LearningEngine {
       .all() as TrajectoryEmbeddingRow[];
 
     this.index = this.createIndex(Math.max(this.maxElements, rows.length + 1));
+    this.labelToTrajectoryId.clear();
+    this.trajectoryIdToLabel.clear();
+    this.nextLabel = 0;
 
     for (const row of rows) {
       const embedding = deserializeEmbedding(row.embedding as Buffer);
@@ -53,7 +54,12 @@ class LearningEngine {
     }
 
     this.initialized = true;
-    logger.info({ trajectoriesIndexed: rows.length }, 'learning engine initialized');
+    logger.info({ trajectoriesIndexed: rows.length }, 'learning engine index rebuilt');
+  }
+
+  async initialize(): Promise<void> {
+    if (this.initialized) return;
+    this.rebuildFromDatabase();
   }
 
   async recordTrajectory(record: TrajectoryRecord): Promise<string> {

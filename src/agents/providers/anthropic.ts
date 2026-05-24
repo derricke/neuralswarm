@@ -3,6 +3,17 @@ import type { AgentConfig, AgentResult } from '../types';
 import { connectMcpServers, getMcpTools, executeMcpTool, disconnectMcpServers, McpClientMap } from '../mcp';
 import { logger } from '../../lib/logger';
 
+const DEFAULT_MAX_TOOL_TURNS = 12;
+
+function getMaxToolTurns(): number {
+  const raw = Number.parseInt(process.env.AGENT_MAX_TOOL_TURNS ?? `${DEFAULT_MAX_TOOL_TURNS}`, 10);
+  if (!Number.isFinite(raw) || raw <= 0) {
+    return DEFAULT_MAX_TOOL_TURNS;
+  }
+
+  return raw;
+}
+
 export async function runAnthropicAgent(
   task: string,
   config: AgentConfig
@@ -22,9 +33,12 @@ export async function runAnthropicAgent(
   let totalInputTokens = 0;
   let totalOutputTokens = 0;
   let output = '';
+  const maxToolTurns = getMaxToolTurns();
+  let turn = 0;
 
   try {
-    while (true) {
+    while (turn < maxToolTurns) {
+      turn++;
       const createOptions: Anthropic.MessageCreateParamsNonStreaming = {
         model: config.model,
         max_tokens: config.maxTokens ?? 1024,
@@ -102,6 +116,10 @@ export async function runAnthropicAgent(
       }
 
       throw new Error(`Anthropic API unexpectedly stopped: ${response.stop_reason}`);
+    }
+
+    if (turn >= maxToolTurns) {
+      throw new Error(`tool_loop_limit_exceeded: exceeded ${maxToolTurns} turns`);
     }
   } finally {
     if (Object.keys(mcpClients).length > 0) {
