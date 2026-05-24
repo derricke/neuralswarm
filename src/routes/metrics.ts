@@ -2,6 +2,7 @@ import { Router, Request, Response } from 'express';
 import fs from 'fs';
 import path from 'path';
 import { getDb } from '../lib/db';
+import { getLearningEngine } from '../learning/engine';
 
 export const metricsRouter = Router();
 const DB_ALERT_THRESHOLD_BYTES = 500 * 1024 * 1024;
@@ -9,6 +10,16 @@ const DB_ALERT_THRESHOLD_BYTES = 500 * 1024 * 1024;
 interface SystemMetrics {
   timestamp: string;
   uptime: number;
+  learning: {
+    mode: 'hnsw_active' | 'db_only_disabled' | 'db_only_fallback' | 'pending_init';
+    initialized: boolean;
+    index_ready: boolean;
+    index_size: number;
+    dimension: number;
+    probe_status: 'not_run' | 'passed' | 'skipped' | 'failed' | 'disabled';
+    probe_message: string | null;
+    env_disabled: boolean;
+  };
   swarms: {
     total: number;
     by_status: Record<string, number>;
@@ -50,6 +61,7 @@ interface SystemMetrics {
  */
 metricsRouter.get('/', (_req: Request, res: Response) => {
   const db = getDb();
+  const learningStatus = getLearningEngine().getRuntimeStatus();
 
   // Swarm metrics
   const swarmStats = db
@@ -173,6 +185,16 @@ metricsRouter.get('/', (_req: Request, res: Response) => {
   const metrics: SystemMetrics = {
     timestamp: new Date().toISOString(),
     uptime: process.uptime(),
+    learning: {
+      mode: learningStatus.mode,
+      initialized: learningStatus.initialized,
+      index_ready: learningStatus.indexReady,
+      index_size: learningStatus.indexSize,
+      dimension: learningStatus.dimension,
+      probe_status: learningStatus.probeStatus,
+      probe_message: learningStatus.probeMessage,
+      env_disabled: learningStatus.envDisabled,
+    },
     swarms: {
       total: totalSwarms,
       by_status: swarmsByStatus,

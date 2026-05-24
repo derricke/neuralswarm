@@ -1,0 +1,10 @@
+{
+  "name": "neuralswarm-smoke-test",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Standalone npm smoke test client for NeuralSwarm API",
+  "type": "module",
+  "scripts": {
+    "test": "node index.mjs"
+  }
+}

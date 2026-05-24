@@ -4,18 +4,24 @@ import type { EmbeddingProvider } from './types';
 const DEFAULT_MODEL = 'text-embedding-3-small';
 
 export class OpenAIEmbeddingProvider implements EmbeddingProvider {
-  private readonly client: OpenAI;
+  private client: OpenAI | null = null;
 
-  constructor(private readonly model = DEFAULT_MODEL) {
-    this.client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-  }
+  constructor(private readonly model = DEFAULT_MODEL) {}
 
-  async embed(text: string): Promise<number[]> {
+  private getClient(): OpenAI {
     if (!process.env.OPENAI_API_KEY) {
       throw new Error('OPENAI_API_KEY is required for learning-engine embeddings');
     }
 
-    const response = await this.client.embeddings.create({
+    if (!this.client) {
+      this.client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+    }
+
+    return this.client;
+  }
+
+  async embed(text: string): Promise<number[]> {
+    const response = await this.getClient().embeddings.create({
       model: this.model,
       input: text,
     });

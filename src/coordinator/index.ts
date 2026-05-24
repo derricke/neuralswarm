@@ -64,10 +64,43 @@ type StartSwarmResult = {
   queuedTasks: number;
 };
 
-const DEFAULT_PROVIDER: AgentProvider = 'openai';
-const DEFAULT_MODEL = 'gpt-4o';
+function getDefaultAgentConfig(): { provider: AgentProvider; model: string } {
+  if (process.env.GOOGLE_API_KEY) {
+    return { provider: 'google', model: 'gemini-2.5-flash' };
+  }
+
+  if (process.env.OPENAI_API_KEY) {
+    return { provider: 'openai', model: 'gpt-4o-mini' };
+  }
+
+  if (process.env.ANTHROPIC_API_KEY) {
+    return { provider: 'anthropic', model: 'claude-3-5-haiku-latest' };
+  }
+
+  return { provider: 'ollama', model: 'llama3' };
+}
+
+let _defaultsLogged = false;
+function logDefaultAgentConfigOnce(): void {
+  if (_defaultsLogged) return;
+  _defaultsLogged = true;
+
+  const defaults = getDefaultAgentConfig();
+  logger.info(
+    {
+      provider: defaults.provider,
+      model: defaults.model,
+      hasGoogleKey: Boolean(process.env.GOOGLE_API_KEY),
+      hasOpenAIKey: Boolean(process.env.OPENAI_API_KEY),
+      hasAnthropicKey: Boolean(process.env.ANTHROPIC_API_KEY),
+    },
+    'default agent config selected from environment'
+  );
+}
 
 export async function startSwarm(swarmId: string): Promise<StartSwarmResult> {
+  logDefaultAgentConfigOnce();
+
   const db = getDb();
   const swarm = db.prepare('SELECT id, status FROM swarms WHERE id = ?').get(swarmId) as SwarmRow | undefined;
 
@@ -545,8 +578,9 @@ async function hireAgentsForSwarm(
   }
 
   const recommendation = await getLearningEngine().recommendAgentProfile(swarmId, firstPending.description);
-  const provider = recommendation?.provider ?? DEFAULT_PROVIDER;
-  const model = recommendation?.model ?? DEFAULT_MODEL;
+  const defaults = getDefaultAgentConfig();
+  const provider = recommendation?.provider ?? defaults.provider;
+  const model = recommendation?.model ?? defaults.model;
 
   registerAgent(swarmId, provider, model);
   hired++;

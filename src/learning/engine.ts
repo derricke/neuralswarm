@@ -16,6 +16,11 @@ type HnswIndex = {
 
 const DEFAULT_DIMENSION = 1536;
 const DEFAULT_MAX_ELEMENTS = 10_000;
+const EMBEDDING_DIMENSION_PROBE_TEXT = 'neuralswarm:embedding-dimension-probe';
+
+type LearningMode = 'hnsw_active' | 'db_only_disabled' | 'db_only_fallback' | 'pending_init';
+
+type ProbeStatus = 'not_run' | 'passed' | 'skipped' | 'failed' | 'disabled';
 
 class LearningEngine {
   private index: HnswIndex | null = null;
@@ -23,6 +28,8 @@ class LearningEngine {
   private trajectoryIdToLabel = new Map<string, number>();
   private nextLabel = 0;
   private initialized = false;
+  private probeStatus: ProbeStatus = 'not_run';
+  private probeMessage: string | null = null;
 
   constructor(
     private readonly embedder: EmbeddingProvider = new OpenAIEmbeddingProvider(),
@@ -59,21 +66,133 @@ class LearningEngine {
     this.trajectoryIdToLabel.clear();
     this.nextLabel = 0;
 
+    let skippedInvalid = 0;
     for (const row of rows) {
       const embedding = deserializeEmbedding(row.embedding as Buffer);
+      if (!this.isValidEmbedding(embedding)) {
+        skippedInvalid++;
+        continue;
+      }
+
       const label = this.nextLabel++;
-      this.index.addPoint(embedding, label);
+      try {
+        this.index.addPoint(embedding, label);
+      } catch (error) {
+        skippedInvalid++;
+        logger.warn(
+          {
+            trajectoryId: row.id,
+            error: error instanceof Error ? error.message : String(error),
+          },
+          'failed to add trajectory embedding to index'
+        );
+        continue;
+      }
+
       this.labelToTrajectoryId.set(label, row.id);
       this.trajectoryIdToLabel.set(row.id, label);
     }
 
     this.initialized = true;
-    logger.info({ trajectoriesIndexed: rows.length }, 'learning engine index rebuilt');
+    logger.info(
+      { trajectoriesIndexed: this.nextLabel, trajectoriesSkipped: skippedInvalid },
+      'learning engine index rebuilt'
+    );
   }
 
   async initialize(): Promise<void> {
     if (this.initialized) return;
+
+    await this.runStartupDimensionProbe();
     this.rebuildFromDatabase();
+  }
+
+  getRuntimeStatus(): {
+    mode: LearningMode;
+    initialized: boolean;
+    indexReady: boolean;
+    indexSize: number;
+    dimension: number;
+    probeStatus: ProbeStatus;
+    probeMessage: string | null;
+    envDisabled: boolean;
+  } {
+    const envDisabled = process.env.LEARNING_DISABLE_HNSW === '1';
+    const indexReady = this.index !== null;
+
+    let mode: LearningMode;
+    if (envDisabled) {
+      mode = 'db_only_disabled';
+    } else if (!this.initialized) {
+      mode = 'pending_init';
+    } else if (indexReady) {
+      mode = 'hnsw_active';
+    } else {
+      mode = 'db_only_fallback';
+    }
+
+    return {
+      mode,
+      initialized: this.initialized,
+      indexReady,
+      indexSize: this.nextLabel,
+      dimension: this.dimension,
+      probeStatus: this.probeStatus,
+      probeMessage: this.probeMessage,
+      envDisabled,
+    };
+  }
+
+  private async runStartupDimensionProbe(): Promise<void> {
+    if (process.env.LEARNING_DISABLE_HNSW === '1') {
+      this.probeStatus = 'disabled';
+      this.probeMessage = 'hnsw disabled by LEARNING_DISABLE_HNSW=1';
+      return;
+    }
+
+    if (process.env.LEARNING_DIMENSION_PROBE === '0') {
+      this.probeStatus = 'skipped';
+      this.probeMessage = 'probe skipped by LEARNING_DIMENSION_PROBE=0';
+      logger.info('learning dimension probe skipped by LEARNING_DIMENSION_PROBE=0');
+      return;
+    }
+
+    try {
+      const probe = await this.embedder.embed(EMBEDDING_DIMENSION_PROBE_TEXT);
+      if (!Array.isArray(probe)) {
+        this.probeStatus = 'failed';
+        this.probeMessage = 'probe returned non-array embedding';
+        logger.warn('learning dimension probe returned non-array embedding; disabling hnsw');
+        process.env.LEARNING_DISABLE_HNSW = '1';
+        return;
+      }
+
+      if (probe.length !== this.dimension) {
+        this.probeStatus = 'failed';
+        this.probeMessage = `dimension mismatch: expected ${this.dimension}, got ${probe.length}`;
+        logger.error(
+          {
+            expectedDimension: this.dimension,
+            actualDimension: probe.length,
+          },
+          'embedding dimension mismatch detected; disabling hnsw'
+        );
+        process.env.LEARNING_DISABLE_HNSW = '1';
+        return;
+      }
+
+      this.probeStatus = 'passed';
+      this.probeMessage = `dimension ${this.dimension}`;
+      logger.info({ dimension: this.dimension }, 'learning dimension probe passed');
+    } catch (error) {
+      this.probeStatus = 'failed';
+      this.probeMessage = error instanceof Error ? error.message : String(error);
+      logger.warn(
+        { error: error instanceof Error ? error.message : String(error) },
+        'learning dimension probe failed; disabling hnsw'
+      );
+      process.env.LEARNING_DISABLE_HNSW = '1';
+    }
   }
 
   async recordTrajectory(record: TrajectoryRecord): Promise<string> {
@@ -82,6 +201,17 @@ class LearningEngine {
     let embedding: number[] | undefined;
     try {
       embedding = await this.embedder.embed(buildTrajectoryEmbeddingText(record));
+      if (embedding && !this.isValidEmbedding(embedding)) {
+        logger.warn(
+          {
+            taskId: record.taskId,
+            expectedDimension: this.dimension,
+            actualDimension: embedding.length,
+          },
+          'trajectory embedding has invalid dimension; skipping index write'
+        );
+        embedding = undefined;
+      }
     } catch (error) {
       logger.warn({ error, taskId: record.taskId }, 'trajectory embedding failed');
     }
@@ -147,12 +277,33 @@ class LearningEngine {
 
     try {
       queryEmbedding = await this.embedder.embed(taskDescription);
+      if (!this.isValidEmbedding(queryEmbedding)) {
+        logger.warn(
+          {
+            swarmId,
+            expectedDimension: this.dimension,
+            actualDimension: queryEmbedding.length,
+          },
+          'query embedding has invalid dimension; skipping similarity search'
+        );
+        return [];
+      }
     } catch (error) {
       logger.warn({ error, swarmId }, 'learning-engine query embedding failed');
       return [];
     }
 
-    const search = this.index.searchKnn(queryEmbedding, Math.min(limit * 4, this.nextLabel));
+    let search;
+    try {
+      search = this.index.searchKnn(queryEmbedding, Math.min(limit * 4, this.nextLabel));
+    } catch (error) {
+      logger.warn(
+        { swarmId, error: error instanceof Error ? error.message : String(error) },
+        'hnsw search failed; falling back to DB-only recommendations'
+      );
+      return [];
+    }
+
     const distancesByLabel = new Map<number, number>();
 
     search.neighbors.forEach((label, index) => {
@@ -207,15 +358,33 @@ class LearningEngine {
 
   private addToIndex(trajectoryId: string, embedding: number[]): void {
     if (!this.index) return;
+    if (!this.isValidEmbedding(embedding)) return;
 
     if (this.index.getCurrentCount() >= this.maxElements) {
       this.index.resizeIndex(this.maxElements * 2);
     }
 
     const label = this.nextLabel++;
-    this.index.addPoint(embedding, label);
-    this.labelToTrajectoryId.set(label, trajectoryId);
-    this.trajectoryIdToLabel.set(trajectoryId, label);
+    try {
+      this.index.addPoint(embedding, label);
+      this.labelToTrajectoryId.set(label, trajectoryId);
+      this.trajectoryIdToLabel.set(trajectoryId, label);
+    } catch (error) {
+      logger.warn(
+        {
+          trajectoryId,
+          error: error instanceof Error ? error.message : String(error),
+        },
+        'failed to add embedding to hnsw index'
+      );
+      this.nextLabel--;
+    }
+  }
+
+  private isValidEmbedding(vector: number[]): boolean {
+    if (!Array.isArray(vector)) return false;
+    if (vector.length !== this.dimension) return false;
+    return vector.every((value) => Number.isFinite(value));
   }
 }
 

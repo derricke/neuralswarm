@@ -17,6 +17,10 @@ export async function runOpenAIAgent(
   task: string,
   config: AgentConfig
 ): Promise<AgentResult> {
+  if (!process.env.OPENAI_API_KEY) {
+    throw new Error('OPENAI_API_KEY is required when using provider=openai');
+  }
+
   const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
   const start = Date.now();
 
