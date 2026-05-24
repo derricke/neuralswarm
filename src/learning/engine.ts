@@ -1,4 +1,3 @@
-import { HierarchicalNSW } from 'hnswlib-node';
 import { getDb } from '../lib/db';
 import { logger } from '../lib/logger';
 import { logTrajectory } from '../memory/trajectoryStore';
@@ -40,7 +39,22 @@ class LearningEngine {
       )
       .all() as TrajectoryEmbeddingRow[];
 
-    this.index = this.createIndex(Math.max(this.maxElements, rows.length + 1));
+    try {
+      this.index = this.createIndex(Math.max(this.maxElements, rows.length + 1));
+    } catch (error) {
+      this.index = null;
+      this.labelToTrajectoryId.clear();
+      this.trajectoryIdToLabel.clear();
+      this.nextLabel = 0;
+      this.initialized = true;
+
+      logger.warn(
+        { error: error instanceof Error ? error.message : String(error) },
+        'learning index unavailable; using DB-only recommendations'
+      );
+      return;
+    }
+
     this.labelToTrajectoryId.clear();
     this.trajectoryIdToLabel.clear();
     this.nextLabel = 0;
@@ -177,6 +191,15 @@ class LearningEngine {
   }
 
   private createIndex(maxElements: number): HnswIndex {
+    if (process.env.LEARNING_DISABLE_HNSW === '1') {
+      throw new Error('hnsw_disabled');
+    }
+
+    // Lazy require keeps native addon out of startup path unless indexing is explicitly enabled.
+    const { HierarchicalNSW } = require('hnswlib-node') as {
+      HierarchicalNSW: new (space: string, dim: number) => unknown;
+    };
+
     const index = new HierarchicalNSW('l2', this.dimension) as unknown as HnswIndex;
     index.initIndex(maxElements);
     return index;
