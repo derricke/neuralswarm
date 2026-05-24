@@ -6,6 +6,7 @@ import { logTrajectory } from '../memory/trajectoryStore';
 import { getLearningEngine } from '../learning/engine';
 import { getOrCreateAgentTypeProfile, updateAgentTypeProfileAfterTask } from '../agents/typeProfile';
 import { updateGlobalJobFailurePatterns } from '../jobs/jobManager';
+import { dispatchTask } from './dispatcher';
 import type { AgentConfig, AgentProvider } from '../agents/types';
 
 const MAX_RETRIES = 3;
@@ -103,6 +104,19 @@ export async function runTask(taskId: string): Promise<void> {
 
   if (!task) throw new Error(`Task not found: ${taskId}`);
   if (task.status === 'completed') return;
+
+  // Run Dispatcher for new, unassigned tasks
+  if (!task.required_job && task.retries === 0) {
+    const dispatchResult = await dispatchTask(taskId);
+    if (dispatchResult.action === 'breakdown') {
+      return; // Task was broken down and cancelled
+    }
+    if (dispatchResult.action === 'route') {
+      // Reload task to pick up the new required_job
+      const reloaded = db.prepare('SELECT * FROM tasks WHERE id = ?').get(taskId) as TaskRow;
+      Object.assign(task, reloaded);
+    }
+  }
 
   const learningEngine = getLearningEngine();
   const recommendation = await safeRecommendAgentProfile(learningEngine, task.swarm_id, task.description);
