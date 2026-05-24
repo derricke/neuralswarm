@@ -3,6 +3,7 @@ import { randomUUID } from 'crypto';
 import { z } from 'zod';
 import { getDb } from '../lib/db';
 import { parseTaskInput } from '../lib/taskParser';
+import { trajectoryEmitter } from '../coordinator/emitter';
 
 export const tasksRouter = Router();
 
@@ -167,6 +168,28 @@ tasksRouter.get('/:id', (req: Request, res: Response) => {
     ...task,
     agent,
     trajectories,
+  });
+});
+
+// GET /tasks/:id/live — SSE stream of trajectory steps
+tasksRouter.get('/:id/live', (req: Request, res: Response) => {
+  const taskId = req.params.id;
+  
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+  res.flushHeaders();
+
+  const onChunk = (data: { taskId: string; chunk: string; type: string }) => {
+    if (data.taskId === taskId) {
+      res.write(`data: ${JSON.stringify(data)}\n\n`);
+    }
+  };
+
+  trajectoryEmitter.on('chunk', onChunk);
+
+  req.on('close', () => {
+    trajectoryEmitter.off('chunk', onChunk);
   });
 });
 

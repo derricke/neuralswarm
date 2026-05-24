@@ -11,6 +11,7 @@ export type AgentConfig = {
     command: string;
     args: string[];
   }>;
+  onStreamChunk?: (chunk: string, type: 'text' | 'tool_call' | 'tool_result') => void;
 };
 
 export type AgentResult = {

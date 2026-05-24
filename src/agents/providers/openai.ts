@@ -1,5 +1,6 @@
 import OpenAI from 'openai';
 import type { AgentConfig, AgentResult } from '../types';
+import { McpManager, McpTool } from '../mcpClient';
 
 export async function runOpenAIAgent(
   task: string,
@@ -8,33 +9,143 @@ export async function runOpenAIAgent(
   const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
   const start = Date.now();
 
-  let response;
+  let mcpManager: McpManager | undefined;
+  let tools: OpenAI.Chat.Completions.ChatCompletionTool[] | undefined;
+  const toolMap = new Map<string, McpTool>();
+
+  if (config.mcpServers && config.mcpServers.length > 0) {
+    mcpManager = new McpManager();
+    await mcpManager.connectAll(config.mcpServers);
+    const mcpTools = await mcpManager.listTools();
+    
+    if (mcpTools.length > 0) {
+      tools = mcpTools.map(t => {
+        toolMap.set(t.name, t);
+        return {
+          type: 'function',
+          function: {
+            name: t.name,
+            description: t.description || '',
+            parameters: t.inputSchema as any
+          }
+        };
+      });
+    }
+  }
+
+  const messages: OpenAI.Chat.Completions.ChatCompletionMessageParam[] = [
+    {
+      role: 'system',
+      content: config.systemPrompt ?? 'You are a helpful assistant. Complete the task concisely.',
+    },
+    { role: 'user', content: task },
+  ];
+
+  let finalOutput = '';
+  let totalInputTokens = 0;
+  let totalOutputTokens = 0;
+
   try {
-    response = await client.chat.completions.create({
-      model: config.model,
-      max_tokens: config.maxTokens ?? 1024,
-      messages: [
-        {
-          role: 'system',
-          content: config.systemPrompt ?? 'You are a helpful assistant. Complete the task concisely.',
-        },
-        { role: 'user', content: task },
-      ],
-      user: 'neuralswarm-agent',
-    });
+    while (true) {
+      const stream = await client.chat.completions.create({
+        model: config.model,
+        max_tokens: config.maxTokens ?? 1024,
+        messages,
+        tools,
+        stream: true,
+        stream_options: { include_usage: true },
+        user: 'neuralswarm-agent',
+      });
+
+      let currentText = '';
+      const toolCalls: Record<number, { id: string, name: string, arguments: string }> = {};
+
+      for await (const chunk of stream) {
+        if (chunk.usage) {
+          totalInputTokens += chunk.usage.prompt_tokens;
+          totalOutputTokens += chunk.usage.completion_tokens;
+        }
+
+        const delta = chunk.choices[0]?.delta;
+        if (!delta) continue;
+
+        if (delta.content) {
+          currentText += delta.content;
+          if (config.onStreamChunk) {
+            config.onStreamChunk(delta.content, 'text');
+          }
+        }
+
+        if (delta.tool_calls) {
+          for (const tc of delta.tool_calls) {
+            const index = tc.index;
+            if (!toolCalls[index]) toolCalls[index] = { id: '', name: '', arguments: '' };
+            if (tc.id) toolCalls[index].id = tc.id;
+            if (tc.function?.name) toolCalls[index].name = tc.function.name;
+            if (tc.function?.arguments) toolCalls[index].arguments += tc.function.arguments;
+          }
+        }
+      }
+
+      finalOutput += currentText;
+      const tcArray = Object.values(toolCalls);
+      
+      messages.push({ 
+        role: 'assistant', 
+        content: currentText || null, 
+        tool_calls: tcArray.length > 0 ? tcArray.map(tc => ({ id: tc.id, type: 'function', function: { name: tc.name, arguments: tc.arguments } })) : undefined 
+      } as any);
+
+      if (tcArray.length === 0) {
+        break; // No more tool calls, done
+      }
+
+      // Execute tool calls
+      for (const tc of tcArray) {
+        if (config.onStreamChunk) {
+          config.onStreamChunk(`\n[Calling tool: ${tc.name} with ${tc.arguments}]\n`, 'tool_call');
+        }
+
+        const mcpTool = toolMap.get(tc.name);
+        let resultStr = '';
+        if (!mcpTool || !mcpManager) {
+          resultStr = `Error: Tool ${tc.name} not found.`;
+        } else {
+          try {
+            const parsedArgs = JSON.parse(tc.arguments);
+            const mcpResult = await mcpManager.callTool(mcpTool._serverName, tc.name, parsedArgs);
+            resultStr = (mcpResult.content as any[]).map((c: any) => c.text).join('\n');
+          } catch (e: any) {
+            resultStr = `Error executing tool: ${e.message}`;
+          }
+        }
+
+        if (config.onStreamChunk) {
+          config.onStreamChunk(`[Tool result]: ${resultStr}\n`, 'tool_result');
+        }
+
+        messages.push({
+          role: 'tool',
+          tool_call_id: tc.id,
+          content: resultStr
+        });
+      }
+    }
   } catch (error) {
+    if (mcpManager) await mcpManager.disconnectAll();
     throw new Error(`OpenAI API Error: ${error instanceof Error ? error.message : String(error)}`);
   }
 
-  const output = response.choices[0]?.message?.content ?? '';
-  const usage = response.usage;
+  if (mcpManager) {
+    await mcpManager.disconnectAll();
+  }
 
   return {
     provider: 'openai',
     model: config.model,
-    output,
-    inputTokens: usage?.prompt_tokens ?? 0,
-    outputTokens: usage?.completion_tokens ?? 0,
+    output: finalOutput,
+    inputTokens: totalInputTokens,
+    outputTokens: totalOutputTokens,
     durationMs: Date.now() - start,
   };
 }

@@ -7,6 +7,7 @@ import { getLearningEngine } from '../learning/engine';
 import { getOrCreateAgentTypeProfile, updateAgentTypeProfileAfterTask } from '../agents/typeProfile';
 import { updateGlobalJobFailurePatterns } from '../jobs/jobManager';
 import { dispatchTask } from './dispatcher';
+import { trajectoryEmitter } from './emitter';
 import type { AgentConfig, AgentProvider } from '../agents/types';
 
 const MAX_RETRIES = 3;
@@ -184,6 +185,9 @@ export async function runTask(taskId: string): Promise<void> {
         temperature: typeProfile.temperature,
         maxTokens: typeProfile.top_k_tokens,
         mcpServers: job?.mcp_servers ? JSON.parse(job.mcp_servers) : undefined,
+        onStreamChunk: (chunk, type) => {
+          trajectoryEmitter.emit('chunk', { taskId, chunk, type });
+        }
       };
 
       const taskStart = Date.now();
