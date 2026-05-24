@@ -1,6 +1,7 @@
 import { randomUUID } from 'crypto';
 import { getDb } from '../lib/db';
 import { logger } from '../lib/logger';
+import type { FailurePattern } from '../agents/typeProfile';
 
 type JobRow = {
   id: string;
@@ -13,6 +14,7 @@ type JobRow = {
   model: string;
   system_prompt: string;
   mcp_servers: string | null;
+  failure_patterns: string | null;
   tasks_assigned: number;
   tasks_completed: number;
   tasks_failed: number;
@@ -30,6 +32,7 @@ export interface SwarmJob {
   provider: string;
   model: string;
   system_prompt: string;
+  failure_patterns: FailurePattern[];
   mcpServers: Array<{ name: string; command: string; args: string[] }>;
   tasks_assigned: number;
   tasks_completed: number;
@@ -46,6 +49,7 @@ export interface GlobalJob {
   provider: string;
   model: string;
   system_prompt: string;
+  failure_patterns: FailurePattern[];
   mcpServers: Array<{ name: string; command: string; args: string[] }>;
   created_at: number;
   updated_at: number;
@@ -74,6 +78,7 @@ function baseJobSelect(whereClause: string): string {
       COALESCE(g.model, sj.model) AS model,
       COALESCE(g.system_prompt, sj.system_prompt) AS system_prompt,
       COALESCE(g.mcp_servers, sj.mcp_servers) AS mcp_servers,
+      COALESCE(g.failure_patterns, '[]') AS failure_patterns,
       sj.tasks_assigned,
       sj.tasks_completed,
       sj.tasks_failed,
@@ -123,6 +128,7 @@ export function listGlobalJobs(): GlobalJob[] {
     provider: row.provider,
     model: row.model,
     system_prompt: row.system_prompt,
+    failure_patterns: JSON.parse(row.failure_patterns || '[]'),
     mcpServers: JSON.parse(row.mcp_servers || '[]'),
     created_at: row.created_at,
     updated_at: row.updated_at,
@@ -142,6 +148,7 @@ export function getGlobalJobById(globalJobId: string): GlobalJob | null {
     provider: row.provider,
     model: row.model,
     system_prompt: row.system_prompt,
+    failure_patterns: JSON.parse(row.failure_patterns || '[]'),
     mcpServers: JSON.parse(row.mcp_servers || '[]'),
     created_at: row.created_at,
     updated_at: row.updated_at,
@@ -347,6 +354,7 @@ function parseJobRow(row: any): SwarmJob {
     provider: row.provider,
     model: row.model,
     system_prompt: row.system_prompt,
+    failure_patterns: JSON.parse(row.failure_patterns || '[]'),
     mcpServers: JSON.parse(row.mcp_servers || '[]'),
     tasks_assigned: Number(row.tasks_assigned ?? 0),
     tasks_completed: Number(row.tasks_completed ?? 0),
@@ -354,4 +362,33 @@ function parseJobRow(row: any): SwarmJob {
     created_at: row.created_at,
     updated_at: row.updated_at,
   };
+}
+
+export async function updateGlobalJobFailurePatterns(
+  globalJobId: string,
+  taskType: string | undefined,
+  error: string
+): Promise<void> {
+  const db = getDb();
+  const globalJob = getGlobalJobById(globalJobId);
+  if (!globalJob) return;
+
+  const failurePatterns = globalJob.failure_patterns;
+  const existingPattern = failurePatterns.find((p) => p.taskType === (taskType || 'unknown'));
+  
+  if (existingPattern) {
+    existingPattern.count++;
+  } else {
+    failurePatterns.push({
+      taskType: taskType || 'unknown',
+      error: error.slice(0, 200),
+      count: 1,
+    });
+  }
+
+  db.prepare(
+    'UPDATE global_jobs SET failure_patterns = ?, updated_at = unixepoch() WHERE id = ?'
+  ).run(JSON.stringify(failurePatterns), globalJobId);
+
+  logger.debug({ globalJobId, count: failurePatterns.length }, 'global job failure patterns updated');
 }

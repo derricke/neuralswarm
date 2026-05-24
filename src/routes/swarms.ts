@@ -114,3 +114,19 @@ swarmsRouter.post('/:id/start', async (req: Request, res: Response) => {
     res.status(500).json({ error: 'failed_to_start_swarm' });
   }
 });
+
+swarmsRouter.delete('/:id', (req: Request, res: Response) => {
+  try {
+    const db = getDb();
+    const info = db.prepare('DELETE FROM swarms WHERE id = ?').run(req.params.id);
+    
+    if (info.changes === 0) {
+      res.status(404).json({ error: 'not_found' });
+      return;
+    }
+    
+    res.status(200).json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: 'failed_to_delete_swarm' });
+  }
+});

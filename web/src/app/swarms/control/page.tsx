@@ -151,6 +151,23 @@ export default function SwarmControlPage() {
     }
   }
 
+  async function deleteSwarm() {
+    if (!canAct) return;
+    if (!confirm('Are you sure you want to delete this swarm? This will permanently delete all associated jobs, agents, tasks, and trajectories.')) return;
+    
+    setBusy(true);
+    try {
+      await fetchJson(`/swarms/${swarmId}`, {
+        method: 'DELETE',
+      });
+      alert('Swarm deleted successfully.');
+      window.location.href = '/';
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Failed to delete swarm');
+      setBusy(false);
+    }
+  }
+
   return (
     <main className="shell">
       <div className="container">
@@ -208,6 +225,11 @@ export default function SwarmControlPage() {
               >
                 Assign Jobs
               </a>
+              {canAct && (
+                <button type="button" className="button" style={{ borderColor: 'var(--status-failed)', color: 'var(--status-failed)' }} onClick={deleteSwarm} disabled={busy}>
+                  Delete Swarm
+                </button>
+              )}
             </div>
             {jobsMessage ? <div className="notice" style={{ marginTop: '1rem' }}>{jobsMessage}</div> : null}
             {startMessage ? <div className="notice" style={{ marginTop: '1rem' }}>{startMessage}</div> : null}

@@ -7,7 +7,7 @@ import { parseTaskInput } from '../lib/taskParser';
 export const tasksRouter = Router();
 
 const SubmitTasksSchema = z.object({
-  swarm_id: z.string().uuid(),
+  swarm_id: z.string().uuid().optional(),
   input: z.string().min(1),
   required_job: z.string().min(1).optional(),
 });
@@ -23,10 +23,12 @@ tasksRouter.post('/', (req: Request, res: Response) => {
   const { swarm_id, input, required_job } = parsed.data;
   const db = getDb();
 
-  const swarm = db.prepare('SELECT id FROM swarms WHERE id = ?').get(swarm_id);
-  if (!swarm) {
-    res.status(404).json({ error: 'swarm_not_found' });
-    return;
+  if (swarm_id) {
+    const swarm = db.prepare('SELECT id FROM swarms WHERE id = ?').get(swarm_id);
+    if (!swarm) {
+      res.status(404).json({ error: 'swarm_not_found' });
+      return;
+    }
   }
 
   const taskInputs = parseTaskInput(input);
@@ -35,7 +37,7 @@ tasksRouter.post('/', (req: Request, res: Response) => {
     return;
   }
 
-  if (required_job) {
+  if (required_job && swarm_id) {
     const job = db
       .prepare(
         `SELECT sj.id
@@ -84,17 +86,50 @@ tasksRouter.post('/', (req: Request, res: Response) => {
 
   const insertMany = db.transaction(() => {
     for (const t of taskInputs) {
-      insert.run(randomUUID(), swarm_id, t.description, required_job ?? null);
+      insert.run(randomUUID(), swarm_id ?? null, t.description, null);
     }
   });
 
   insertMany();
 
-  const tasks = db
-    .prepare('SELECT * FROM tasks WHERE swarm_id = ? ORDER BY created_at DESC LIMIT ?')
-    .all(swarm_id, taskInputs.length);
+  const tasks = swarm_id 
+    ? db.prepare('SELECT * FROM tasks WHERE swarm_id = ? ORDER BY created_at DESC LIMIT ?').all(swarm_id, taskInputs.length)
+    : db.prepare('SELECT * FROM tasks WHERE swarm_id IS NULL ORDER BY created_at DESC LIMIT ?').all(taskInputs.length);
 
   res.status(201).json({ parsed: taskInputs.length, tasks });
+});
+
+const AssignTaskSchema = z.object({
+  swarm_id: z.string().uuid().nullable()
+});
+
+// PUT /tasks/:id/assign — assign or unassign a task from a swarm
+tasksRouter.put('/:id/assign', (req: Request, res: Response) => {
+  const parsed = AssignTaskSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: 'invalid_request', details: parsed.error.flatten() });
+    return;
+  }
+
+  const { swarm_id } = parsed.data;
+  const db = getDb();
+  
+  if (swarm_id) {
+    const swarm = db.prepare('SELECT id FROM swarms WHERE id = ?').get(swarm_id);
+    if (!swarm) {
+      res.status(404).json({ error: 'swarm_not_found' });
+      return;
+    }
+  }
+
+  const info = db.prepare('UPDATE tasks SET swarm_id = ?, updated_at = unixepoch() WHERE id = ?').run(swarm_id, req.params.id);
+  if (info.changes === 0) {
+    res.status(404).json({ error: 'task_not_found' });
+    return;
+  }
+
+  const task = db.prepare('SELECT * FROM tasks WHERE id = ?').get(req.params.id);
+  res.json(task);
 });
 
 // GET /tasks/:id — includes full trajectory history
@@ -140,9 +175,14 @@ tasksRouter.get('/', (req: Request, res: Response) => {
   const db = getDb();
   const swarmId = typeof req.query.swarm_id === 'string' ? req.query.swarm_id : undefined;
 
-  const tasks = swarmId
-    ? db.prepare('SELECT * FROM tasks WHERE swarm_id = ? ORDER BY created_at DESC').all(swarmId)
-    : db.prepare('SELECT * FROM tasks ORDER BY created_at DESC').all();
+  let tasks;
+  if (swarmId === 'null') {
+    tasks = db.prepare('SELECT * FROM tasks WHERE swarm_id IS NULL ORDER BY created_at DESC').all();
+  } else if (swarmId) {
+    tasks = db.prepare('SELECT * FROM tasks WHERE swarm_id = ? ORDER BY created_at DESC').all(swarmId);
+  } else {
+    tasks = db.prepare('SELECT * FROM tasks ORDER BY created_at DESC').all();
+  }
 
   res.json(tasks);
 });

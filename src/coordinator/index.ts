@@ -5,6 +5,7 @@ import { logger } from '../lib/logger';
 import { logTrajectory } from '../memory/trajectoryStore';
 import { getLearningEngine } from '../learning/engine';
 import { getOrCreateAgentTypeProfile, updateAgentTypeProfileAfterTask } from '../agents/typeProfile';
+import { updateGlobalJobFailurePatterns } from '../jobs/jobManager';
 import type { AgentConfig, AgentProvider } from '../agents/types';
 
 const MAX_RETRIES = 3;
@@ -51,6 +52,7 @@ type JobRow = {
   model: string;
   system_prompt: string;
   mcp_servers: string | null;
+  failure_patterns: string | null;
 };
 
 type StartSwarmResult = {
@@ -146,11 +148,24 @@ export async function runTask(taskId: string): Promise<void> {
       // Load agent type profile (learned traits)
       const typeProfile = await safeLoadAgentTypeProfile(agent.provider, agent.model);
       const job = agent.job_id ? getJobById(agent.job_id, task.swarm_id) : null;
+      let systemPrompt = job?.system_prompt ?? typeProfile.best_system_prompt ?? undefined;
+
+      if (job?.failure_patterns) {
+        try {
+          const patterns = JSON.parse(job.failure_patterns) as { taskType: string, error: string, count: number }[];
+          if (patterns.length > 0) {
+            const patternsText = patterns
+              .map(p => `- Previous failure when attempting task type '${p.taskType}': ${p.error} (occurred ${p.count} times)`)
+              .join('\\n');
+            systemPrompt = (systemPrompt || '') + `\\n\\nCRITICAL WARNINGS (Learn from past failures in this role):\\n${patternsText}`;
+          }
+        } catch (e) {}
+      }
 
       const config: AgentConfig = {
         provider: agent.provider,
         model: agent.model,
-        systemPrompt: job?.system_prompt ?? typeProfile.best_system_prompt ?? undefined,
+        systemPrompt,
         temperature: typeProfile.temperature,
         maxTokens: typeProfile.top_k_tokens,
         mcpServers: job?.mcp_servers ? JSON.parse(job.mcp_servers) : undefined,
@@ -211,6 +226,12 @@ export async function runTask(taskId: string): Promise<void> {
       `).run(errorType, errorType, agent.id);
       if (agent.job_id) {
         incrementJobMetric(agent.job_id, 'tasks_failed');
+        const job = getJobById(agent.job_id, task.swarm_id);
+        if (job?.global_job_id) {
+          updateGlobalJobFailurePatterns(job.global_job_id, 'unknown', errorType).catch(e => {
+            logger.warn({ error: e }, 'failed to update job failure patterns');
+          });
+        }
       }
 
       // Update agent type profile with failure
@@ -423,7 +444,8 @@ function getJobById(jobId: string, swarmId: string): JobRow | null {
         COALESCE(g.provider, sj.provider) AS provider,
         COALESCE(g.model, sj.model) AS model,
         COALESCE(g.system_prompt, sj.system_prompt) AS system_prompt,
-        COALESCE(g.mcp_servers, sj.mcp_servers) AS mcp_servers
+        COALESCE(g.mcp_servers, sj.mcp_servers) AS mcp_servers,
+        COALESCE(g.failure_patterns, '[]') AS failure_patterns
       FROM swarm_jobs sj
       LEFT JOIN global_jobs g ON g.id = sj.global_job_id
       WHERE sj.id = ? AND sj.swarm_id = ?`

@@ -78,6 +78,7 @@ function runMigrations(db: Database.Database) {
       provider              TEXT NOT NULL,
       model                 TEXT NOT NULL,
       system_prompt         TEXT NOT NULL,
+      failure_patterns      TEXT DEFAULT '[]',
       created_at            INTEGER NOT NULL DEFAULT (unixepoch()),
       updated_at            INTEGER NOT NULL DEFAULT (unixepoch())
     );
@@ -120,7 +121,7 @@ function runMigrations(db: Database.Database) {
 
     CREATE TABLE IF NOT EXISTS tasks (
       id          TEXT PRIMARY KEY,
-      swarm_id    TEXT NOT NULL REFERENCES swarms(id) ON DELETE CASCADE,
+      swarm_id    TEXT REFERENCES swarms(id) ON DELETE SET NULL,
       agent_id    TEXT REFERENCES agents(id),
       required_job TEXT REFERENCES swarm_jobs(id),
       description TEXT NOT NULL,
@@ -142,7 +143,7 @@ function runMigrations(db: Database.Database) {
     CREATE TABLE IF NOT EXISTS trajectories (
       id           TEXT PRIMARY KEY,
       task_id      TEXT NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
-      swarm_id     TEXT NOT NULL REFERENCES swarms(id) ON DELETE CASCADE,
+      swarm_id     TEXT REFERENCES swarms(id) ON DELETE SET NULL,
       agent_id     TEXT,
       job_id       TEXT REFERENCES swarm_jobs(id),
       provider     TEXT NOT NULL,
@@ -248,6 +249,7 @@ function runMigrations(db: Database.Database) {
   ensureColumnExists(db, 'swarm_jobs', 'tasks_completed', 'INTEGER NOT NULL DEFAULT 0');
   ensureColumnExists(db, 'swarm_jobs', 'tasks_failed', 'INTEGER NOT NULL DEFAULT 0');
   ensureColumnExists(db, 'global_jobs', 'mcp_servers', "TEXT DEFAULT '[]'");
+  ensureColumnExists(db, 'global_jobs', 'failure_patterns', "TEXT DEFAULT '[]'");
   ensureColumnExists(db, 'swarm_jobs', 'mcp_servers', "TEXT DEFAULT '[]'");
 
   db.exec(`
@@ -256,7 +258,71 @@ function runMigrations(db: Database.Database) {
     CREATE INDEX IF NOT EXISTS idx_tasks_required_job ON tasks(required_job);
   `);
 
+  migrateTasksTable(db);
   backfillGlobalJobs(db);
+}
+
+function migrateTasksTable(db: Database.Database) {
+  const fkList = db.prepare(`PRAGMA foreign_key_list(tasks)`).all() as Array<{
+    table: string;
+    on_delete: string;
+  }>;
+  const hasCascade = fkList.some((fk) => fk.table === 'swarms' && fk.on_delete === 'CASCADE');
+
+  if (hasCascade) {
+    db.exec(`
+      PRAGMA foreign_keys = OFF;
+      BEGIN TRANSACTION;
+      
+      CREATE TABLE tasks_new (
+        id          TEXT PRIMARY KEY,
+        swarm_id    TEXT REFERENCES swarms(id) ON DELETE SET NULL,
+        agent_id    TEXT REFERENCES agents(id),
+        required_job TEXT REFERENCES swarm_jobs(id),
+        description TEXT NOT NULL,
+        status      TEXT NOT NULL DEFAULT 'pending',
+        retries     INTEGER NOT NULL DEFAULT 0,
+        result      TEXT,
+        error       TEXT,
+        created_at  INTEGER NOT NULL DEFAULT (unixepoch()),
+        updated_at  INTEGER NOT NULL DEFAULT (unixepoch())
+      );
+      
+      INSERT INTO tasks_new SELECT * FROM tasks;
+      DROP TABLE tasks;
+      ALTER TABLE tasks_new RENAME TO tasks;
+      
+      CREATE TABLE trajectories_new (
+        id           TEXT PRIMARY KEY,
+        task_id      TEXT NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
+        swarm_id     TEXT REFERENCES swarms(id) ON DELETE SET NULL,
+        agent_id     TEXT,
+        job_id       TEXT REFERENCES swarm_jobs(id),
+        provider     TEXT NOT NULL,
+        model        TEXT NOT NULL,
+        description  TEXT NOT NULL,
+        result       TEXT,
+        success      INTEGER NOT NULL DEFAULT 0,
+        retries      INTEGER NOT NULL DEFAULT 0,
+        duration_ms  INTEGER NOT NULL DEFAULT 0,
+        embedding    BLOB,
+        archived_at  INTEGER,
+        created_at   INTEGER NOT NULL DEFAULT (unixepoch())
+      );
+      
+      INSERT INTO trajectories_new SELECT * FROM trajectories;
+      DROP TABLE trajectories;
+      ALTER TABLE trajectories_new RENAME TO trajectories;
+      
+      CREATE INDEX idx_trajectories_swarm ON trajectories(swarm_id);
+      CREATE INDEX idx_trajectories_job ON trajectories(job_id);
+      CREATE INDEX idx_trajectories_created ON trajectories(created_at);
+      CREATE INDEX idx_tasks_required_job ON tasks(required_job);
+      
+      COMMIT;
+      PRAGMA foreign_keys = ON;
+    `);
+  }
 }
 
 function backfillGlobalJobs(db: Database.Database) {
