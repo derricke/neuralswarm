@@ -64,6 +64,15 @@ type StartSwarmResult = {
   queuedTasks: number;
 };
 
+function isProviderAvailable(provider: AgentProvider): boolean {
+  switch (provider) {
+    case 'openai': return Boolean(process.env.OPENAI_API_KEY);
+    case 'anthropic': return Boolean(process.env.ANTHROPIC_API_KEY);
+    case 'google': return Boolean(process.env.GOOGLE_API_KEY);
+    case 'ollama': return true; // no key required
+  }
+}
+
 function getDefaultAgentConfig(): { provider: AgentProvider; model: string } {
   if (process.env.GOOGLE_API_KEY) {
     return { provider: 'google', model: 'gemini-2.5-flash' };
@@ -333,7 +342,12 @@ async function safeRecommendAgentProfile(
   description: string
 ): Promise<{ provider: AgentProvider; model: string } | null> {
   try {
-    return await learningEngine.recommendAgentProfile(swarmId, description);
+    const rec = await learningEngine.recommendAgentProfile(swarmId, description);
+    if (rec && !isProviderAvailable(rec.provider)) {
+      logger.warn({ provider: rec.provider }, 'recommended provider key not configured; ignoring recommendation');
+      return null;
+    }
+    return rec;
   } catch (error) {
     logger.warn({ swarmId, error }, 'agent recommendation failed; falling back to idle-agent routing');
     return null;
@@ -421,6 +435,7 @@ function pickAgent(
 
   const eligible = candidates.filter(
     (a) =>
+      isProviderAvailable(a.provider) &&
       !blacklistedProviders.includes(a.provider) &&
       a.id !== excludeAgentId &&
       !isFired(a)
@@ -466,7 +481,7 @@ function pickAgentForJob(
     .all(swarmId, jobId) as AgentRow[];
 
   const eligible = candidates.filter(
-    (a) => !blacklistedProviders.includes(a.provider) && a.id !== excludeAgentId && !isFired(a)
+    (a) => isProviderAvailable(a.provider) && !blacklistedProviders.includes(a.provider) && a.id !== excludeAgentId && !isFired(a)
   );
 
   if (eligible.length === 0) return undefined;
@@ -551,6 +566,11 @@ async function hireAgentsForSwarm(
 
   if (jobs.length > 0) {
     for (const job of jobs) {
+      if (!isProviderAvailable(job.provider)) {
+        logger.warn({ provider: job.provider, jobId: job.id }, 'skipping agent hire: provider key not configured');
+        continue;
+      }
+
       const existing = db
         .prepare(`SELECT id FROM agents WHERE swarm_id = ? AND job_id = ? LIMIT 1`)
         .get(swarmId, job.id) as { id: string } | undefined;
@@ -579,8 +599,9 @@ async function hireAgentsForSwarm(
 
   const recommendation = await getLearningEngine().recommendAgentProfile(swarmId, firstPending.description);
   const defaults = getDefaultAgentConfig();
-  const provider = recommendation?.provider ?? defaults.provider;
-  const model = recommendation?.model ?? defaults.model;
+  const filteredRec = recommendation && isProviderAvailable(recommendation.provider) ? recommendation : null;
+  const provider = filteredRec?.provider ?? defaults.provider;
+  const model = filteredRec?.model ?? defaults.model;
 
   registerAgent(swarmId, provider, model);
   hired++;
