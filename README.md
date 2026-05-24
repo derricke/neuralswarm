@@ -76,6 +76,21 @@ npm --prefix web run dev
 # Dashboard at http://localhost:3001
 ```
 
+### Run with Docker
+
+NeuralSwarm provides a multi-stage `Dockerfile` and a `docker-compose.yml` for easy deployment. It automatically handles native bindings (SQLite, HNSW) and persistent volume mounts.
+
+1. Ensure your `.env` file is created with your API keys.
+2. Run the services in the background:
+```bash
+docker-compose up -d
+```
+3. View the logs to ensure the server started successfully:
+```bash
+docker-compose logs -f
+```
+The backend API will be available at `http://localhost:3000`.
+
 ### Create API Key For Protected Endpoints
 
 Most endpoints (including `POST /swarms`) require a bearer token.
@@ -306,9 +321,9 @@ npm run dev           # Backend
 npm --prefix web run dev  # Frontend (separate terminal)
 ```
 
-### Docker (Post-MVP)
+### Docker
 
-See `Dockerfile` and `docker-compose.yml` for containerized deployment.
+See `Dockerfile` and `docker-compose.yml` for containerized deployment. The SQLite database is automatically mounted as a persistent volume in `./data`.
 
 ### Environment
 

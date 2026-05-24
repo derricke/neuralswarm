@@ -161,11 +161,9 @@
   - [x] Environment variables guide (ANTHROPIC_API_KEY, OPENAI_API_KEY, etc.)
   - [ ] Docker setup instructions
 
-- [ ] **Deployment**
+- [/] **Deployment**
   - [ ] Docker image with Node.js + SQLite
-  - [ ] docker-compose.yml (SQLite, optional Postgres migration path
-  - [ ] docker-compose.yml (optional: Postgres instead of SQLite)
-  - [ ] CI/CD pipeline (lint, test, build)
+  - [ ] docker-compose.yml (SQLite volume mounts)
 
 ## Milestone 4: Beta Release
 - [ ] Performance tuning (agent spawn <5s, task assign <1s)
@@ -185,3 +183,4 @@
 - [ ] **Live Trajectory UI:** Implement SSE (Server-Sent Events) in the Express API and a live scrolling dashboard in the Next.js UI to stream agent reasoning.
 - [ ] **Economy Routing:** Add logic for the Coordinator to attempt cheaper models (Ollama/Haiku) before falling back to expensive models upon failure.
 - [ ] **Prompt Auto-refinement:** Use the Learning Engine to periodically summarize successful trajectories and propose optimizations for Job system prompts.
+- [ ] **CI/CD Pipeline:** Implement GitHub Actions for automated linting, testing, and building.
