@@ -140,6 +140,14 @@
     - [x] Integration tests: mixed explicit + auto workflows
     - [x] Learning tests: verify recommendations improve over time
 
+  ### Phase 4: Job-Level Learning & Dispatcher
+  - [x] **Agent-Agnostic LLM Dispatcher**
+    - [x] Fast semantic routing, breakdown, and dynamic hiring via lightweight LLMs.
+  - [x] **Decoupled Memory**
+    - [x] Tasks and Trajectories safely unlinked from Swarms (`ON DELETE SET NULL`) so learning persists.
+  - [x] **Job-Level Failure Patterns**
+    - [x] Coordinator catches agent errors and injects `CRITICAL WARNINGS` into future agents of the same job.
+
   ## Milestone 3: Quality + Polish
 - [ ] **Error Handling**
   - [x] Graceful degradation (o (exponential backoff, max 3 attempts)
