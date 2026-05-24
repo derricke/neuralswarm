@@ -10,6 +10,19 @@ export type DispatchResult =
   | { action: 'breakdown' }
   | { action: 'fallback' };
 
+function isProviderAvailable(provider: AgentProvider): boolean {
+  switch (provider) {
+    case 'openai':
+      return Boolean(process.env.OPENAI_API_KEY);
+    case 'anthropic':
+      return Boolean(process.env.ANTHROPIC_API_KEY);
+    case 'google':
+      return Boolean(process.env.GOOGLE_API_KEY);
+    case 'ollama':
+      return true;
+  }
+}
+
 function getDispatcherConfig(): AgentConfig {
   if (process.env.COORDINATOR_PROVIDER && process.env.COORDINATOR_MODEL) {
     return {
@@ -41,12 +54,25 @@ export async function dispatchTask(taskId: string): Promise<DispatchResult> {
   // If task already has a required job, no need to dispatch
   if (task.required_job) return { action: 'fallback' };
 
-  const jobs = db.prepare(`
-    SELECT sj.id, COALESCE(g.title, sj.title) as title, COALESCE(g.description, sj.description) as description 
+  const allJobs = db.prepare(`
+    SELECT
+      sj.id,
+      COALESCE(g.title, sj.title) as title,
+      COALESCE(g.description, sj.description) as description,
+      COALESCE(g.provider, sj.provider) as provider,
+      COALESCE(g.model, sj.model) as model
     FROM swarm_jobs sj 
     LEFT JOIN global_jobs g ON g.id = sj.global_job_id 
     WHERE sj.swarm_id = ?
-  `).all(task.swarm_id) as Array<{ id: string, title: string, description: string }>;
+  `).all(task.swarm_id) as Array<{
+    id: string;
+    title: string;
+    description: string;
+    provider: AgentProvider;
+    model: string;
+  }>;
+
+  const jobs = allJobs.filter((job) => isProviderAvailable(job.provider));
 
   const config = getDispatcherConfig();
 

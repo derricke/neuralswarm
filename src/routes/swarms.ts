@@ -11,6 +11,10 @@ const CreateSwarmSchema = z.object({
   config: z.record(z.string(), z.unknown()).optional().default({}),
 });
 
+const UpdateSwarmConfigSchema = z.object({
+  workspaceDir: z.string().max(4096).optional().nullable(),
+});
+
 swarmsRouter.post('/', (req: Request, res: Response) => {
   const parsed = CreateSwarmSchema.safeParse(req.body);
   if (!parsed.success) {
@@ -96,6 +100,50 @@ swarmsRouter.get('/', (_req: Request, res: Response) => {
   const db = getDb();
   const swarms = db.prepare('SELECT * FROM swarms ORDER BY created_at DESC').all();
   res.json(swarms);
+});
+
+// PATCH /swarms/:id/config — update mutable swarm config fields
+swarmsRouter.patch('/:id/config', (req: Request, res: Response) => {
+  const parsed = UpdateSwarmConfigSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: 'invalid_request', details: parsed.error.flatten() });
+    return;
+  }
+
+  const db = getDb();
+  const row = db.prepare('SELECT id, config FROM swarms WHERE id = ?').get(req.params.id) as
+    | { id: string; config: string | null }
+    | undefined;
+
+  if (!row) {
+    res.status(404).json({ error: 'not_found' });
+    return;
+  }
+
+  let config: Record<string, unknown> = {};
+  if (row.config) {
+    try {
+      config = JSON.parse(row.config) as Record<string, unknown>;
+    } catch {
+      config = {};
+    }
+  }
+
+  const rawWorkspaceDir = parsed.data.workspaceDir;
+  const normalized = typeof rawWorkspaceDir === 'string' ? rawWorkspaceDir.trim() : '';
+  if (normalized.length > 0) {
+    config.workspaceDir = normalized;
+  } else {
+    delete config.workspaceDir;
+  }
+
+  db.prepare('UPDATE swarms SET config = ?, updated_at = unixepoch() WHERE id = ?').run(
+    JSON.stringify(config),
+    req.params.id
+  );
+
+  const updated = db.prepare('SELECT * FROM swarms WHERE id = ?').get(req.params.id);
+  res.json(updated);
 });
 
 // POST /swarms/:id/start — start swarm execution and auto-hire agents as needed

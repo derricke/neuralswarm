@@ -8,7 +8,7 @@ import { trajectoryEmitter } from '../coordinator/emitter';
 export const tasksRouter = Router();
 
 const SubmitTasksSchema = z.object({
-  swarm_id: z.string().uuid().optional(),
+  swarm_id: z.string().trim().min(1).optional(),
   input: z.string().min(1),
   required_job: z.string().min(1).optional(),
 });
@@ -101,7 +101,7 @@ tasksRouter.post('/', (req: Request, res: Response) => {
 });
 
 const AssignTaskSchema = z.object({
-  swarm_id: z.string().uuid().nullable()
+  swarm_id: z.string().trim().min(1).nullable()
 });
 
 // PUT /tasks/:id/assign — assign or unassign a task from a swarm

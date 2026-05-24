@@ -1,4 +1,5 @@
 import { randomUUID } from 'crypto';
+import { resolve } from 'path';
 import { getDb } from '../lib/db';
 import { spawnAgent } from '../agents/spawner';
 import { logger } from '../lib/logger';
@@ -31,6 +32,7 @@ type AgentRow = {
 type SwarmRow = {
   id: string;
   status: string;
+  config?: string | null;
 };
 
 type TaskRow = {
@@ -142,6 +144,60 @@ type ProviderBlacklistRow = {
   blacklisted_until: number;
 };
 
+function getDefaultWorkspaceDir(): string {
+  const fromEnv = process.env.NEURALSWARM_WORKSPACE_DIR?.trim();
+  if (fromEnv) {
+    return resolve(fromEnv);
+  }
+
+  return process.cwd();
+}
+
+function getSwarmWorkspaceDir(swarmId: string): string {
+  const db = getDb();
+  const row = db
+    .prepare('SELECT config FROM swarms WHERE id = ?')
+    .get(swarmId) as { config: string | null } | undefined;
+
+  if (!row?.config) {
+    return getDefaultWorkspaceDir();
+  }
+
+  try {
+    const config = JSON.parse(row.config) as { workspaceDir?: unknown };
+    if (typeof config.workspaceDir === 'string' && config.workspaceDir.trim().length > 0) {
+      return resolve(config.workspaceDir);
+    }
+  } catch {
+    logger.warn({ swarmId }, 'invalid swarm config JSON; falling back to default workspace dir');
+  }
+
+  return getDefaultWorkspaceDir();
+}
+
+function resolveMcpServersForWorkspace(
+  swarmId: string,
+  rawMcpServers: AgentConfig['mcpServers']
+): AgentConfig['mcpServers'] {
+  if (!rawMcpServers || rawMcpServers.length === 0) {
+    return rawMcpServers;
+  }
+
+  const workspaceDir = getSwarmWorkspaceDir(swarmId);
+
+  return rawMcpServers.map((server) => {
+    const pkgIndex = server.args.findIndex((arg) => arg.includes('@modelcontextprotocol/server-filesystem'));
+    if (pkgIndex === -1) {
+      return server;
+    }
+
+    return {
+      ...server,
+      args: [...server.args.slice(0, pkgIndex + 1), workspaceDir],
+    };
+  });
+}
+
 export async function runTask(taskId: string): Promise<void> {
   const db = getDb();
   const task = db.prepare('SELECT * FROM tasks WHERE id = ?').get(taskId) as TaskRow | undefined;
@@ -226,7 +282,10 @@ export async function runTask(taskId: string): Promise<void> {
         systemPrompt,
         temperature: typeProfile.temperature,
         maxTokens: typeProfile.top_k_tokens,
-        mcpServers: job?.mcp_servers ? JSON.parse(job.mcp_servers) : undefined,
+        mcpServers: resolveMcpServersForWorkspace(
+          task.swarm_id,
+          job?.mcp_servers ? JSON.parse(job.mcp_servers) : undefined
+        ),
         onStreamChunk: (chunk, type) => {
           trajectoryEmitter.emit('chunk', { taskId, chunk, type });
         }
@@ -564,10 +623,12 @@ async function hireAgentsForSwarm(
     )
     .all(swarmId) as JobRow[];
 
+  const skippedUnavailableProviders = new Set<AgentProvider>();
+
   if (jobs.length > 0) {
     for (const job of jobs) {
       if (!isProviderAvailable(job.provider)) {
-        logger.warn({ provider: job.provider, jobId: job.id }, 'skipping agent hire: provider key not configured');
+        skippedUnavailableProviders.add(job.provider);
         continue;
       }
 
@@ -581,14 +642,20 @@ async function hireAgentsForSwarm(
       }
     }
 
-    return hired;
+    if (skippedUnavailableProviders.size > 0) {
+      logger.info(
+        { swarmId, providers: Array.from(skippedUnavailableProviders) },
+        'skipped jobs with providers that are not configured in environment'
+      );
+    }
   }
 
-  const existingAgents = db
-    .prepare(`SELECT id FROM agents WHERE swarm_id = ? LIMIT 1`)
-    .all(swarmId) as Array<{ id: string }>;
+  const idleAgents = db
+    .prepare(`SELECT * FROM agents WHERE swarm_id = ? AND status = 'idle'`)
+    .all(swarmId) as AgentRow[];
 
-  if (existingAgents.length > 0) {
+  const hasRunnableIdleAgent = idleAgents.some((agent) => isProviderAvailable(agent.provider) && !isFired(agent));
+  if (hasRunnableIdleAgent) {
     return hired;
   }
 
@@ -597,12 +664,19 @@ async function hireAgentsForSwarm(
     return hired;
   }
 
-  const recommendation = await getLearningEngine().recommendAgentProfile(swarmId, firstPending.description);
+  let recommendation: { provider: AgentProvider; model: string } | null = null;
+  try {
+    recommendation = await getLearningEngine().recommendAgentProfile(swarmId, firstPending.description);
+  } catch (error) {
+    logger.warn({ swarmId, error }, 'agent recommendation failed during auto-hire; using defaults');
+  }
+
   const defaults = getDefaultAgentConfig();
   const filteredRec = recommendation && isProviderAvailable(recommendation.provider) ? recommendation : null;
   const provider = filteredRec?.provider ?? defaults.provider;
   const model = filteredRec?.model ?? defaults.model;
 
+  logger.info({ swarmId, provider, model }, 'auto-hiring fallback agent for pending tasks');
   registerAgent(swarmId, provider, model);
   hired++;
 
