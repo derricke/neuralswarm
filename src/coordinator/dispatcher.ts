@@ -6,7 +6,7 @@ import { createJob } from '../jobs/jobManager';
 import type { AgentConfig, AgentProvider } from '../agents/types';
 
 export type DispatchResult =
-  | { action: 'route'; jobId: string }
+  | { action: 'route'; jobId: string; complexity?: 'low' | 'high' }
   | { action: 'breakdown' }
   | { action: 'fallback' };
 
@@ -59,7 +59,8 @@ ${jobs.length === 0 ? "None" : jobs.map(j => `- ID: ${j.id}\n  Title: ${j.title}
 DECISION TYPES (Choose exactly one):
 
 1. ROUTE: If the task perfectly matches one of the Available Jobs, route it to that job.
-{ "action": "route", "job_id": "<id>", "reasoning": "..." }
+You MUST also grade the task's complexity ("low" or "high"). Mark it "low" if it is a simple script, basic text formatting, or straightforward query that can be safely executed by a cheap/fast model. Otherwise mark it "high".
+{ "action": "route", "job_id": "<id>", "complexity": "low|high", "reasoning": "..." }
 
 2. BREAKDOWN: If the task is too complex or requires multiple steps/skills that should be done concurrently or sequentially by different agents, break it down.
 { "action": "breakdown", "subtasks": ["subtask 1 description", "subtask 2 description"] }
@@ -87,8 +88,8 @@ Return ONLY the raw JSON object. Do not wrap in markdown tags like \`\`\`json.`;
     logger.info({ taskId, action: decision.action }, 'dispatcher made a decision');
 
     if (decision.action === 'route' && decision.job_id) {
-      db.prepare('UPDATE tasks SET required_job = ?, updated_at = unixepoch() WHERE id = ?').run(decision.job_id, taskId);
-      return { action: 'route', jobId: decision.job_id };
+      db.prepare('UPDATE tasks SET required_job = ?, complexity = COALESCE(?, complexity), updated_at = unixepoch() WHERE id = ?').run(decision.job_id, decision.complexity || 'high', taskId);
+      return { action: 'route', jobId: decision.job_id, complexity: decision.complexity };
     } 
     
     if (decision.action === 'breakdown' && Array.isArray(decision.subtasks) && decision.subtasks.length > 0) {

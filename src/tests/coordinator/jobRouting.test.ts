@@ -103,7 +103,8 @@ describe('Phase 2 explicit job routing', () => {
       retries: 0,
       result: null,
       error: null,
-    };
+      complexity: 'high',
+    } as any;
 
     const routed = routeTaskWithJob(task, null);
     expect(routed?.id).toBe(coderAgentId);

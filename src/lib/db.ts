@@ -252,6 +252,7 @@ function runMigrations(db: Database.Database) {
   ensureColumnExists(db, 'global_jobs', 'failure_patterns', "TEXT DEFAULT '[]'");
   ensureColumnExists(db, 'swarm_jobs', 'mcp_servers', "TEXT DEFAULT '[]'");
   ensureColumnExists(db, 'tasks', 'parent_id', "TEXT REFERENCES tasks(id) ON DELETE SET NULL");
+  ensureColumnExists(db, 'tasks', 'complexity', "TEXT DEFAULT 'high'");
 
   db.exec(`
     CREATE INDEX IF NOT EXISTS idx_swarm_jobs_global_job ON swarm_jobs(global_job_id);

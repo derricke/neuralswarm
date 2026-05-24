@@ -42,6 +42,7 @@ type TaskRow = {
   retries: number;
   result: string | null;
   error: string | null;
+  complexity: 'high' | 'low';
 };
 
 type JobRow = {
@@ -178,7 +179,7 @@ export async function runTask(taskId: string): Promise<void> {
 
       const config: AgentConfig = {
         provider: agent.provider,
-        model: agent.model,
+        model: (attempt === 0 && task.complexity === 'low') ? getCheapModel(agent.provider) : agent.model,
         systemPrompt,
         temperature: typeProfile.temperature,
         maxTokens: typeProfile.top_k_tokens,
@@ -444,6 +445,15 @@ function getSuccessRate(agent: AgentRow): number {
 
   const successes = agent.tasks_assigned - agent.tasks_failed;
   return successes / agent.tasks_assigned;
+}
+
+function getCheapModel(provider: AgentProvider): string {
+  switch (provider) {
+    case 'openai': return 'gpt-4o-mini';
+    case 'anthropic': return 'claude-3-5-haiku-latest';
+    case 'google': return 'gemini-2.5-flash';
+    case 'ollama': return 'llama3';
+  }
 }
 
 function getJobById(jobId: string, swarmId: string): JobRow | null {
