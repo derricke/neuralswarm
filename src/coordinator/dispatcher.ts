@@ -98,7 +98,7 @@ Return ONLY the raw JSON object. Do not wrap in markdown tags like \`\`\`json.`;
         for (const sub of decision.subtasks) {
           insert.run(randomUUID(), task.swarm_id, taskId, String(sub));
         }
-        db.prepare("UPDATE tasks SET status = 'completed', result = 'Broken down into subtasks by Coordinator', updated_at = unixepoch() WHERE id = ?").run(taskId);
+        db.prepare("UPDATE tasks SET status = 'cancelled', result = 'Broken down into subtasks by Coordinator', updated_at = unixepoch() WHERE id = ?").run(taskId);
       })();
       return { action: 'breakdown' };
     }
@@ -107,8 +107,8 @@ Return ONLY the raw JSON object. Do not wrap in markdown tags like \`\`\`json.`;
       const newJob = await createJob(task.swarm_id, {
         title: decision.new_job_title,
         description: decision.description || decision.new_job_title,
-        provider: 'openai', // Agent provider doesn't matter for job definition, Coordinator will pick best model
-        model: 'gpt-4o',
+        provider: config.provider,
+        model: config.model,
         system_prompt: decision.system_prompt
       });
       

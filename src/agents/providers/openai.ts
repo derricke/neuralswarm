@@ -13,26 +13,6 @@ export async function runOpenAIAgent(
   let tools: OpenAI.Chat.Completions.ChatCompletionTool[] | undefined;
   const toolMap = new Map<string, McpTool>();
 
-  if (config.mcpServers && config.mcpServers.length > 0) {
-    mcpManager = new McpManager();
-    await mcpManager.connectAll(config.mcpServers);
-    const mcpTools = await mcpManager.listTools();
-    
-    if (mcpTools.length > 0) {
-      tools = mcpTools.map(t => {
-        toolMap.set(t.name, t);
-        return {
-          type: 'function',
-          function: {
-            name: t.name,
-            description: t.description || '',
-            parameters: t.inputSchema as any
-          }
-        };
-      });
-    }
-  }
-
   const messages: OpenAI.Chat.Completions.ChatCompletionMessageParam[] = [
     {
       role: 'system',
@@ -46,6 +26,26 @@ export async function runOpenAIAgent(
   let totalOutputTokens = 0;
 
   try {
+    if (config.mcpServers && config.mcpServers.length > 0) {
+      mcpManager = new McpManager();
+      await mcpManager.connectAll(config.mcpServers);
+      const mcpTools = await mcpManager.listTools();
+      
+      if (mcpTools.length > 0) {
+        tools = mcpTools.map(t => {
+          const uniqueName = `${t._serverName}__${t.name}`.replace(/[^a-zA-Z0-9_-]/g, '_');
+          toolMap.set(uniqueName, t);
+          return {
+            type: 'function',
+            function: {
+              name: uniqueName,
+              description: t.description || '',
+              parameters: t.inputSchema as any
+            }
+          };
+        });
+      }
+    }
     while (true) {
       const stream = await client.chat.completions.create({
         model: config.model,
@@ -113,7 +113,7 @@ export async function runOpenAIAgent(
         } else {
           try {
             const parsedArgs = JSON.parse(tc.arguments);
-            const mcpResult = await mcpManager.callTool(mcpTool._serverName, tc.name, parsedArgs);
+            const mcpResult = await mcpManager.callTool(mcpTool._serverName, mcpTool.name, parsedArgs);
             resultStr = (mcpResult.content as any[]).map((c: any) => c.text).join('\n');
           } catch (e: any) {
             resultStr = `Error executing tool: ${e.message}`;

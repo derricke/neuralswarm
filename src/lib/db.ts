@@ -229,7 +229,6 @@ function runMigrations(db: Database.Database) {
 
     CREATE INDEX IF NOT EXISTS idx_api_keys_key ON api_keys(key);
     CREATE INDEX IF NOT EXISTS idx_trajectories_swarm ON trajectories(swarm_id);
-    CREATE INDEX IF NOT EXISTS idx_trajectories_job ON trajectories(job_id);
     CREATE INDEX IF NOT EXISTS idx_trajectories_created ON trajectories(created_at);
     CREATE INDEX IF NOT EXISTS idx_trajectory_archive_swarm ON trajectory_archive(swarm_id);
     CREATE INDEX IF NOT EXISTS idx_trajectory_archive_archived_at ON trajectory_archive(archived_at);
@@ -258,6 +257,7 @@ function runMigrations(db: Database.Database) {
     CREATE INDEX IF NOT EXISTS idx_swarm_jobs_global_job ON swarm_jobs(global_job_id);
     CREATE INDEX IF NOT EXISTS idx_agents_job ON agents(job_id);
     CREATE INDEX IF NOT EXISTS idx_tasks_required_job ON tasks(required_job);
+    CREATE INDEX IF NOT EXISTS idx_trajectories_job ON trajectories(job_id);
   `);
 
   migrateTasksTable(db);
@@ -281,6 +281,8 @@ function migrateTasksTable(db: Database.Database) {
         swarm_id    TEXT REFERENCES swarms(id) ON DELETE SET NULL,
         agent_id    TEXT REFERENCES agents(id),
         required_job TEXT REFERENCES swarm_jobs(id),
+        parent_id   TEXT REFERENCES tasks(id) ON DELETE SET NULL,
+        complexity  TEXT DEFAULT 'high',
         description TEXT NOT NULL,
         status      TEXT NOT NULL DEFAULT 'pending',
         retries     INTEGER NOT NULL DEFAULT 0,
@@ -290,7 +292,8 @@ function migrateTasksTable(db: Database.Database) {
         updated_at  INTEGER NOT NULL DEFAULT (unixepoch())
       );
       
-      INSERT INTO tasks_new SELECT * FROM tasks;
+      INSERT INTO tasks_new (id, swarm_id, agent_id, required_job, parent_id, complexity, description, status, retries, result, error, created_at, updated_at)
+      SELECT id, swarm_id, agent_id, required_job, parent_id, complexity, description, status, retries, result, error, created_at, updated_at FROM tasks;
       DROP TABLE tasks;
       ALTER TABLE tasks_new RENAME TO tasks;
       
@@ -312,7 +315,8 @@ function migrateTasksTable(db: Database.Database) {
         created_at   INTEGER NOT NULL DEFAULT (unixepoch())
       );
       
-      INSERT INTO trajectories_new SELECT * FROM trajectories;
+      INSERT INTO trajectories_new (id, task_id, swarm_id, agent_id, job_id, provider, model, description, result, success, retries, duration_ms, embedding, archived_at, created_at)
+      SELECT id, task_id, swarm_id, agent_id, job_id, provider, model, description, result, success, retries, duration_ms, embedding, archived_at, created_at FROM trajectories;
       DROP TABLE trajectories;
       ALTER TABLE trajectories_new RENAME TO trajectories;
       

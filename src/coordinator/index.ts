@@ -247,9 +247,13 @@ export async function runTask(taskId: string): Promise<void> {
         incrementJobMetric(agent.job_id, 'tasks_failed');
         const job = getJobById(agent.job_id, task.swarm_id);
         if (job?.global_job_id) {
-          updateGlobalJobFailurePatterns(job.global_job_id, 'unknown', errorType).catch(e => {
-            logger.warn({ error: e }, 'failed to update job failure patterns');
-          });
+          const isSystemError = ['rate_limit', 'timeout', 'auth_error', 'provider_error'].includes(errorType);
+          if (!isSystemError) {
+            const actualError = err instanceof Error ? err.message : String(err);
+            updateGlobalJobFailurePatterns(job.global_job_id, task.description, actualError).catch(e => {
+              logger.warn({ error: e }, 'failed to update job failure patterns');
+            });
+          }
         }
       }
 

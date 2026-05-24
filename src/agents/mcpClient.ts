@@ -13,15 +13,20 @@ export class McpManager {
   private transports: Map<string, StdioClientTransport> = new Map();
 
   async connectAll(servers: Array<{name: string, command: string, args: string[]}>) {
-    for (const s of servers) {
-      const transport = new StdioClientTransport({
-        command: s.command,
-        args: s.args,
-      });
-      const client = new Client({ name: "neuralswarm", version: "1.0.0" }, { capabilities: {} });
-      await client.connect(transport);
-      this.clients.set(s.name, client);
-      this.transports.set(s.name, transport);
+    try {
+      for (const s of servers) {
+        const transport = new StdioClientTransport({
+          command: s.command,
+          args: s.args,
+        });
+        this.transports.set(s.name, transport);
+        const client = new Client({ name: "neuralswarm", version: "1.0.0" }, { capabilities: {} });
+        await client.connect(transport);
+        this.clients.set(s.name, client);
+      }
+    } catch (e) {
+      await this.disconnectAll();
+      throw e;
     }
   }
 
