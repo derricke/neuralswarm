@@ -9,6 +9,7 @@ import { logger } from './lib/logger';
 import { startHealthMonitor } from './coordinator/healthMonitor';
 import { startScheduler } from './lib/scheduler';
 import { initDb } from './lib/db';
+import { getLearningEngine } from './learning/engine';
 
 const PORT = parseInt(process.env.PORT ?? '3000', 10);
 const bootId = randomUUID();
@@ -31,6 +32,34 @@ function parsePositiveInt(value: string | undefined): number | null {
   const parsed = Number.parseInt(value, 10);
   if (!Number.isFinite(parsed) || parsed <= 0) return null;
   return parsed;
+}
+
+function describeHnswRuntimeStatus(status: {
+  mode: 'hnsw_active' | 'db_only_disabled' | 'db_only_fallback' | 'pending_init';
+  probeStatus: 'not_run' | 'passed' | 'skipped' | 'failed' | 'disabled';
+  probeMessage: string | null;
+  envDisabled: boolean;
+  indexReady: boolean;
+}): string {
+  if (status.mode === 'hnsw_active' && status.indexReady) {
+    return 'enabled: hnsw index active';
+  }
+
+  if (status.envDisabled || status.mode === 'db_only_disabled') {
+    return status.probeMessage
+      ? `disabled: ${status.probeMessage}`
+      : 'disabled: LEARNING_DISABLE_HNSW=1';
+  }
+
+  if (status.probeMessage) {
+    return `disabled: ${status.probeMessage}`;
+  }
+
+  if (status.probeStatus === 'passed') {
+    return 'disabled: index not available';
+  }
+
+  return `disabled: probe_status=${status.probeStatus}`;
 }
 
 function setupProcessDiagnostics(): void {
@@ -132,6 +161,31 @@ try {
 
 const server = app.listen(PORT, () => {
   logger.info({ bootId, port: PORT, startupMs: Date.now() - startupTs }, 'neuralswarm started');
+
+  void (async () => {
+    logger.info({ bootId, phase: 'init_learning' }, 'startup phase');
+    try {
+      const learningEngine = getLearningEngine();
+      await learningEngine.initialize();
+      const learning = learningEngine.getRuntimeStatus();
+      logger.info(
+        {
+          bootId,
+          hnswEnabled: learning.mode === 'hnsw_active' && learning.indexReady,
+          reason: describeHnswRuntimeStatus(learning),
+          mode: learning.mode,
+          probeStatus: learning.probeStatus,
+          probeMessage: learning.probeMessage,
+          indexReady: learning.indexReady,
+          indexSize: learning.indexSize,
+          dimension: learning.dimension,
+        },
+        'learning runtime status'
+      );
+    } catch (error) {
+      logger.warn({ bootId, phase: 'init_learning', error: toErrorLike(error) }, 'startup learning init failed');
+    }
+  })();
 
   logger.info({ bootId, phase: 'start_health_monitor' }, 'startup phase');
   startHealthMonitor();

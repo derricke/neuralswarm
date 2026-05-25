@@ -3,6 +3,7 @@ import { getDb } from '../lib/db';
 import { logger } from '../lib/logger';
 import { getLearningEngine } from '../learning/engine';
 import type { AgentProvider } from '../agents/types';
+import { isProviderAvailable, resolveDefaultProviderModel } from '../agents/providerConfig';
 import type { FailurePattern } from '../agents/typeProfile';
 
 type RoleRow = {
@@ -67,35 +68,6 @@ export interface CreateRoleInput {
   system_prompt: string;
   recommendation_swarm_id?: string;
   mcpServers?: Array<{ name: string; command: string; args: string[] }>;
-}
-
-function isProviderAvailable(provider: AgentProvider): boolean {
-  switch (provider) {
-    case 'openai':
-      return Boolean(process.env.OPENAI_API_KEY);
-    case 'anthropic':
-      return Boolean(process.env.ANTHROPIC_API_KEY);
-    case 'google':
-      return Boolean(process.env.GOOGLE_API_KEY);
-    case 'ollama':
-      return true;
-  }
-}
-
-function resolveDefaultProviderModel(): { provider: string; model: string } {
-  if (process.env.GOOGLE_API_KEY) {
-    return { provider: 'google', model: 'gemini-2.5-flash' };
-  }
-
-  if (process.env.OPENAI_API_KEY) {
-    return { provider: 'openai', model: 'gpt-4o-mini' };
-  }
-
-  if (process.env.ANTHROPIC_API_KEY) {
-    return { provider: 'anthropic', model: 'claude-3-5-haiku-latest' };
-  }
-
-  return { provider: 'ollama', model: 'llama3' };
 }
 
 async function resolveRecommendedProviderModel(

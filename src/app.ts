@@ -26,6 +26,8 @@ function sanitizeError(message: string): string {
     .replace(/ANTHROPIC_API_KEY/gi, '[redacted]')
     .replace(/OPENAI_API_KEY/gi, '[redacted]')
     .replace(/GOOGLE_API_KEY/gi, '[redacted]')
+    .replace(/OPENAI_COMPATIBLE_API_KEY/gi, '[redacted]')
+    .replace(/OPENAI_COMPATIBLE_URL/gi, '[redacted]')
     .replace(/OLLAMA_HOST/gi, '[redacted]');
 }
 

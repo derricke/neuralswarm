@@ -1,4 +1,4 @@
-export type AgentProvider = 'anthropic' | 'openai' | 'google' | 'ollama';
+export type AgentProvider = 'anthropic' | 'openai' | 'google' | 'openai_compatible' | 'ollama';
 
 export type AgentConfig = {
   provider: AgentProvider;

@@ -15,6 +15,7 @@ export async function spawnAgent(task: string, config: AgentConfig): Promise<Age
       result = await runAnthropicAgent(task, config);
       break;
     case 'openai':
+    case 'openai_compatible':
       result = await runOpenAIAgent(task, config);
       break;
     case 'google':

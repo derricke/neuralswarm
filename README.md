@@ -6,7 +6,7 @@ NeuralSwarm is a Node.js service that orchestrates multiple LLM agents, routes t
 
 ## Key Features
 
-- **Multi-provider support**: Anthropic (Claude), OpenAI (GPT), Google (Gemini), Ollama (local)
+- **Multi-provider support**: Anthropic (Claude), OpenAI (GPT), Google (Gemini), OpenAI-compatible endpoints (for example OpenRouter), Ollama (local)
 - **Health monitoring**: Automatic agent firing on failure thresholds + provider blacklisting
 - **Learning engine**: HNSW-backed trajectory similarity search for intelligent routing
 - **Task orchestration**: Parse plain text, TODO lists, or headings into tasks and queue them
@@ -40,6 +40,8 @@ Create a `.env` file in the root directory:
 ANTHROPIC_API_KEY=sk-ant-...
 OPENAI_API_KEY=sk-...
 GOOGLE_API_KEY=...
+OPENAI_COMPATIBLE_API_KEY=
+OPENAI_COMPATIBLE_URL=
 OLLAMA_HOST=http://localhost:11434
 
 # Optional

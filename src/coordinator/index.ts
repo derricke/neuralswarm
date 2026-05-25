@@ -10,6 +10,11 @@ import { updateGlobalRoleFailurePatterns } from '../roles/roleManager';
 import { dispatchTask } from './dispatcher';
 import { trajectoryEmitter } from './emitter';
 import type { AgentConfig, AgentProvider } from '../agents/types';
+import {
+  hasOpenAICompatibleConfig,
+  isProviderAvailable,
+  resolveDefaultProviderModel,
+} from '../agents/providerConfig';
 
 const MAX_RETRIES = 3;
 const RETRY_BACKOFF_MS = [1000, 2000, 4000] as const;
@@ -66,29 +71,8 @@ type StartSwarmResult = {
   queuedTasks: number;
 };
 
-function isProviderAvailable(provider: AgentProvider): boolean {
-  switch (provider) {
-    case 'openai': return Boolean(process.env.OPENAI_API_KEY);
-    case 'anthropic': return Boolean(process.env.ANTHROPIC_API_KEY);
-    case 'google': return Boolean(process.env.GOOGLE_API_KEY);
-    case 'ollama': return true; // no key required
-  }
-}
-
 function getDefaultAgentConfig(): { provider: AgentProvider; model: string } {
-  if (process.env.GOOGLE_API_KEY) {
-    return { provider: 'google', model: 'gemini-2.5-flash' };
-  }
-
-  if (process.env.OPENAI_API_KEY) {
-    return { provider: 'openai', model: 'gpt-4o-mini' };
-  }
-
-  if (process.env.ANTHROPIC_API_KEY) {
-    return { provider: 'anthropic', model: 'claude-3-5-haiku-latest' };
-  }
-
-  return { provider: 'ollama', model: 'llama3' };
+  return resolveDefaultProviderModel();
 }
 
 let _defaultsLogged = false;
@@ -104,6 +88,7 @@ function logDefaultAgentConfigOnce(): void {
       hasGoogleKey: Boolean(process.env.GOOGLE_API_KEY),
       hasOpenAIKey: Boolean(process.env.OPENAI_API_KEY),
       hasAnthropicKey: Boolean(process.env.ANTHROPIC_API_KEY),
+      hasOpenAICompatibleConfig: hasOpenAICompatibleConfig(),
     },
     'default agent config selected from environment'
   );
@@ -574,6 +559,7 @@ function getCheapModel(provider: AgentProvider): string {
 
   switch (provider) {
     case 'openai': return 'gpt-4o-mini';
+    case 'openai_compatible': return process.env.OPENAI_COMPATIBLE_DEFAULT_CHEAP_MODEL?.trim() || 'gpt-4o-mini';
     case 'anthropic': return 'claude-3-5-haiku-latest';
     case 'google': return 'gemini-2.5-flash';
     case 'ollama': return 'llama3';
@@ -586,6 +572,7 @@ function getAdvancedModel(provider: AgentProvider): string {
 
   switch (provider) {
     case 'openai': return 'gpt-4o';
+    case 'openai_compatible': return process.env.OPENAI_COMPATIBLE_DEFAULT_ADVANCED_MODEL?.trim() || 'gpt-4o';
     case 'anthropic': return 'claude-3-5-sonnet-latest';
     case 'google': return 'gemini-2.5-pro';
     case 'ollama': return 'llama3';

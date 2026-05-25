@@ -5,12 +5,17 @@ import type { EmbeddingProvider } from '../../learning/types';
 
 class FakeEmbedder implements EmbeddingProvider {
   private readonly vectors = new Map<string, number[]>();
+  private static readonly PROBE_TEXT = 'neuralswarm:embedding-dimension-probe';
 
   set(text: string, vector: number[]): void {
     this.vectors.set(text, vector);
   }
 
   async embed(text: string): Promise<number[]> {
+    if (text === FakeEmbedder.PROBE_TEXT) {
+      return [0, 0, 0];
+    }
+
     const vector = this.vectors.get(text);
     if (!vector) {
       throw new Error(`missing vector for: ${text}`);
@@ -184,5 +189,76 @@ describe('learning engine', () => {
 
     const after = await engine.recommendAgentProfile(swarmId, 'Refactor API handlers');
     expect(after).toMatchObject({ provider: 'anthropic', model: 'claude-3-5-sonnet' });
+  });
+
+  it('gracefully skips embeddings when OPENAI_API_KEY is missing', async () => {
+    const previousOpenAiKey = process.env.OPENAI_API_KEY;
+    const previousGoogleKey = process.env.GOOGLE_API_KEY;
+    const previousEmbeddingProvider = process.env.LEARNING_EMBEDDING_PROVIDER;
+    const previousOllamaHost = process.env.OLLAMA_HOST;
+    const previousDisableHnsw = process.env.LEARNING_DISABLE_HNSW;
+    delete process.env.OPENAI_API_KEY;
+    delete process.env.GOOGLE_API_KEY;
+    delete process.env.LEARNING_EMBEDDING_PROVIDER;
+    delete process.env.OLLAMA_HOST;
+    delete process.env.LEARNING_DISABLE_HNSW;
+
+    try {
+      const swarmId = seedSwarm();
+      const taskId = seedTask(swarmId, 'Draft onboarding doc');
+      const engine = createLearningEngine();
+
+      const trajectoryId = await engine.recordTrajectory({
+        taskId,
+        swarmId,
+        agentId: null,
+        provider: 'anthropic',
+        model: 'claude-3-5-sonnet',
+        description: 'Draft onboarding doc',
+        result: 'created draft',
+        success: true,
+        retries: 0,
+        durationMs: 30,
+      });
+
+      const status = engine.getRuntimeStatus();
+      expect(status.probeStatus).toBe('skipped');
+      expect(status.probeMessage).toContain('No embedding provider configured');
+
+      const row = getDb()
+        .prepare('SELECT embedding FROM trajectories WHERE id = ?')
+        .get(trajectoryId) as { embedding: Buffer | null };
+      expect(row.embedding).toBeNull();
+    } finally {
+      if (previousOpenAiKey === undefined) {
+        delete process.env.OPENAI_API_KEY;
+      } else {
+        process.env.OPENAI_API_KEY = previousOpenAiKey;
+      }
+
+      if (previousGoogleKey === undefined) {
+        delete process.env.GOOGLE_API_KEY;
+      } else {
+        process.env.GOOGLE_API_KEY = previousGoogleKey;
+      }
+
+      if (previousEmbeddingProvider === undefined) {
+        delete process.env.LEARNING_EMBEDDING_PROVIDER;
+      } else {
+        process.env.LEARNING_EMBEDDING_PROVIDER = previousEmbeddingProvider;
+      }
+
+      if (previousOllamaHost === undefined) {
+        delete process.env.OLLAMA_HOST;
+      } else {
+        process.env.OLLAMA_HOST = previousOllamaHost;
+      }
+
+      if (previousDisableHnsw === undefined) {
+        delete process.env.LEARNING_DISABLE_HNSW;
+      } else {
+        process.env.LEARNING_DISABLE_HNSW = previousDisableHnsw;
+      }
+    }
   });
 });

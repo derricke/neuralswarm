@@ -24,11 +24,29 @@ At least one LLM provider API key must be configured:
 - Format: Long alphanumeric string
 - Models available: `gemini-2.0-flash`, `gemini-1.5-pro`
 
+### `OPENAI_COMPATIBLE_API_KEY`
+- Enables OpenAI-compatible providers (for example OpenRouter) when paired with `OPENAI_COMPATIBLE_URL`
+- Format: provider-specific API key/token
+
+### `OPENAI_COMPATIBLE_URL`
+- Base URL for OpenAI-compatible chat/embedding APIs
+- Example: `https://openrouter.ai/api/v1`
+- Must be set together with `OPENAI_COMPATIBLE_API_KEY`
+
 ### `OLLAMA_HOST`
 - Enables local models via Ollama
 - Default: `http://localhost:11434` (no API key needed)
 - Format: `http://host:port`
 - Requires: Ollama running locally with models pulled (e.g., `ollama run llama2`)
+
+### Learning Embeddings Provider Selection
+- Learning embeddings are provider-agnostic and auto-selected in this order (unless overridden):
+  - `GOOGLE_API_KEY` -> Google embeddings (`text-embedding-004`)
+  - `OPENAI_API_KEY` -> OpenAI embeddings (`text-embedding-3-small`)
+  - `OPENAI_COMPATIBLE_API_KEY` + `OPENAI_COMPATIBLE_URL` -> OpenAI-compatible embeddings
+  - `OLLAMA_HOST` -> Ollama embeddings (`nomic-embed-text`)
+- Optional override: `LEARNING_EMBEDDING_PROVIDER=openai|google|openai_compatible|ollama`
+- Startup now logs whether HNSW is enabled and the reason when disabled.
 
 ## Optional
 

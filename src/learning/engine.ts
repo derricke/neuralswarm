@@ -1,7 +1,13 @@
 import { getDb } from '../lib/db';
 import { logger } from '../lib/logger';
 import { logTrajectory } from '../memory/trajectoryStore';
-import { buildTrajectoryEmbeddingText, deserializeEmbedding, OpenAIEmbeddingProvider, serializeEmbedding } from './embedding';
+import {
+  AutoEmbeddingProvider,
+  buildTrajectoryEmbeddingText,
+  deserializeEmbedding,
+  isEmbeddingConfigurationError,
+  serializeEmbedding,
+} from './embedding';
 import type { AgentRecommendation, EmbeddingProvider, LearningEngineOptions, TrajectoryEmbeddingRow } from './types';
 import type { TrajectoryRecord } from '../memory/trajectoryStore';
 import type { AgentProvider } from '../agents/types';
@@ -30,12 +36,18 @@ class LearningEngine {
   private initialized = false;
   private probeStatus: ProbeStatus = 'not_run';
   private probeMessage: string | null = null;
+  private embeddingsUnavailableReason: string | null = null;
+  private dimension: number;
+  private readonly isDimensionPinned: boolean;
 
   constructor(
-    private readonly embedder: EmbeddingProvider = new OpenAIEmbeddingProvider(),
-    private readonly dimension = DEFAULT_DIMENSION,
+    private readonly embedder: EmbeddingProvider = new AutoEmbeddingProvider(),
+    dimension = DEFAULT_DIMENSION,
     private readonly maxElements = DEFAULT_MAX_ELEMENTS
-  ) {}
+  ) {
+    this.dimension = dimension;
+    this.isDimensionPinned = dimension !== DEFAULT_DIMENSION;
+  }
 
   rebuildFromDatabase(): void {
     const rows = getDb()
@@ -49,16 +61,18 @@ class LearningEngine {
     try {
       this.index = this.createIndex(Math.max(this.maxElements, rows.length + 1));
     } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
       this.index = null;
       this.labelToTrajectoryId.clear();
       this.trajectoryIdToLabel.clear();
       this.nextLabel = 0;
       this.initialized = true;
 
-      logger.warn(
-        { error: error instanceof Error ? error.message : String(error) },
-        'learning index unavailable; using DB-only recommendations'
-      );
+      if (errorMessage === 'hnsw_disabled') {
+        logger.info('learning index disabled; using DB-only recommendations');
+      } else {
+        logger.warn({ error: errorMessage }, 'learning index unavailable; using DB-only recommendations');
+      }
       return;
     }
 
@@ -168,6 +182,19 @@ class LearningEngine {
       }
 
       if (probe.length !== this.dimension) {
+        if (!this.isDimensionPinned) {
+          logger.info(
+            {
+              previousDimension: this.dimension,
+              detectedDimension: probe.length,
+            },
+            'detected embedding dimension at startup'
+          );
+          this.dimension = probe.length;
+        }
+      }
+
+      if (probe.length !== this.dimension) {
         this.probeStatus = 'failed';
         this.probeMessage = `dimension mismatch: expected ${this.dimension}, got ${probe.length}`;
         logger.error(
@@ -183,12 +210,24 @@ class LearningEngine {
 
       this.probeStatus = 'passed';
       this.probeMessage = `dimension ${this.dimension}`;
+      this.embeddingsUnavailableReason = null;
       logger.info({ dimension: this.dimension }, 'learning dimension probe passed');
     } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+
+      if (isEmbeddingConfigurationError(error)) {
+        this.probeStatus = 'skipped';
+        this.probeMessage = `embedding unavailable: ${errorMessage}`;
+        this.embeddingsUnavailableReason = errorMessage;
+        logger.info({ error: errorMessage }, 'learning embeddings unavailable; disabling hnsw');
+        process.env.LEARNING_DISABLE_HNSW = '1';
+        return;
+      }
+
       this.probeStatus = 'failed';
-      this.probeMessage = error instanceof Error ? error.message : String(error);
+      this.probeMessage = errorMessage;
       logger.warn(
-        { error: error instanceof Error ? error.message : String(error) },
+        { error: errorMessage },
         'learning dimension probe failed; disabling hnsw'
       );
       process.env.LEARNING_DISABLE_HNSW = '1';
@@ -199,21 +238,23 @@ class LearningEngine {
     await this.initialize();
 
     let embedding: number[] | undefined;
-    try {
-      embedding = await this.embedder.embed(buildTrajectoryEmbeddingText(record));
-      if (embedding && !this.isValidEmbedding(embedding)) {
-        logger.warn(
-          {
-            taskId: record.taskId,
-            expectedDimension: this.dimension,
-            actualDimension: embedding.length,
-          },
-          'trajectory embedding has invalid dimension; skipping index write'
-        );
-        embedding = undefined;
+    if (!this.embeddingsUnavailableReason) {
+      try {
+        embedding = await this.embedder.embed(buildTrajectoryEmbeddingText(record));
+        if (embedding && !this.isValidEmbedding(embedding)) {
+          logger.warn(
+            {
+              taskId: record.taskId,
+              expectedDimension: this.dimension,
+              actualDimension: embedding.length,
+            },
+            'trajectory embedding has invalid dimension; skipping index write'
+          );
+          embedding = undefined;
+        }
+      } catch (error) {
+        logger.warn({ error, taskId: record.taskId }, 'trajectory embedding failed');
       }
-    } catch (error) {
-      logger.warn({ error, taskId: record.taskId }, 'trajectory embedding failed');
     }
 
     const trajectoryId = logTrajectory({
@@ -271,6 +312,7 @@ class LearningEngine {
   ): Promise<Array<{ id: string; provider: AgentProvider; model: string; distance: number; score: number }>> {
     await this.initialize();
 
+    if (this.embeddingsUnavailableReason) return [];
     if (!this.index || this.nextLabel === 0) return [];
 
     let queryEmbedding: number[];

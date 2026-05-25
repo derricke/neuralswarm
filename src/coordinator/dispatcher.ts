@@ -4,24 +4,12 @@ import { logger } from '../lib/logger';
 import { spawnAgent } from '../agents/spawner';
 import { createRole } from '../roles/roleManager';
 import type { AgentConfig, AgentProvider } from '../agents/types';
+import { isProviderAvailable, resolveDefaultProviderModel } from '../agents/providerConfig';
 
 export type DispatchResult =
   | { action: 'route'; jobId: string; complexity?: 'low' | 'high' }
   | { action: 'breakdown' }
   | { action: 'fallback' };
-
-function isProviderAvailable(provider: AgentProvider): boolean {
-  switch (provider) {
-    case 'openai':
-      return Boolean(process.env.OPENAI_API_KEY);
-    case 'anthropic':
-      return Boolean(process.env.ANTHROPIC_API_KEY);
-    case 'google':
-      return Boolean(process.env.GOOGLE_API_KEY);
-    case 'ollama':
-      return true;
-  }
-}
 
 function getDispatcherConfig(): AgentConfig {
   if (process.env.COORDINATOR_PROVIDER && process.env.COORDINATOR_MODEL) {
@@ -32,17 +20,8 @@ function getDispatcherConfig(): AgentConfig {
     };
   }
 
-  if (process.env.GOOGLE_API_KEY) {
-    return { provider: 'google', model: 'gemini-2.5-flash', temperature: 0.1 };
-  }
-  if (process.env.OPENAI_API_KEY) {
-    return { provider: 'openai', model: 'gpt-4o-mini', temperature: 0.1 };
-  }
-  if (process.env.ANTHROPIC_API_KEY) {
-    return { provider: 'anthropic', model: 'claude-3-5-haiku-latest', temperature: 0.1 };
-  }
-  
-  return { provider: 'ollama', model: 'llama3', temperature: 0.1 };
+  const defaults = resolveDefaultProviderModel();
+  return { provider: defaults.provider, model: defaults.model, temperature: 0.1 };
 }
 
 export async function dispatchTask(taskId: string): Promise<DispatchResult> {

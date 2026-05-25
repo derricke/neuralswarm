@@ -17,11 +17,22 @@ export async function runOpenAIAgent(
   task: string,
   config: AgentConfig
 ): Promise<AgentResult> {
-  if (!process.env.OPENAI_API_KEY) {
-    throw new Error('OPENAI_API_KEY is required when using provider=openai');
+  const isCompatible = config.provider === 'openai_compatible';
+  const apiKey = isCompatible
+    ? process.env.OPENAI_COMPATIBLE_API_KEY?.trim()
+    : process.env.OPENAI_API_KEY?.trim();
+
+  if (!apiKey) {
+    const envName = isCompatible ? 'OPENAI_COMPATIBLE_API_KEY' : 'OPENAI_API_KEY';
+    throw new Error(`${envName} is required when using provider=${config.provider}`);
   }
 
-  const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+  const baseURL = isCompatible ? process.env.OPENAI_COMPATIBLE_URL?.trim() : undefined;
+  if (isCompatible && !baseURL) {
+    throw new Error('OPENAI_COMPATIBLE_URL is required when using provider=openai_compatible');
+  }
+
+  const client = new OpenAI({ apiKey, baseURL });
   const start = Date.now();
 
   let mcpManager: McpManager | undefined;
@@ -163,7 +174,7 @@ export async function runOpenAIAgent(
   }
 
   return {
-    provider: 'openai',
+    provider: config.provider,
     model: config.model,
     output: finalOutput,
     inputTokens: totalInputTokens,

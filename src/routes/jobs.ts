@@ -4,12 +4,9 @@ import { registerAgent } from '../coordinator';
 import { getDb } from '../lib/db';
 import { logger } from '../lib/logger';
 import type { AgentProvider } from '../agents/types';
+import { isAgentProvider } from '../agents/providerConfig';
 
 const router = Router();
-
-function isAgentProvider(value: unknown): value is AgentProvider {
-  return value === 'anthropic' || value === 'openai' || value === 'google' || value === 'ollama';
-}
 
 /**
  * GET /jobs
