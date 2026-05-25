@@ -38,6 +38,14 @@ type SwarmDetail = {
   };
 };
 
+type TaskRow = {
+  id: string;
+  swarm_id: string;
+  description: string;
+  status: string;
+  created_at: string | number;
+};
+
 const UUID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
@@ -60,6 +68,28 @@ function resolveSwarmId(input: string, swarms: SwarmOption[]): string | null {
   return UUID_PATTERN.test(normalized) ? normalized : null;
 }
 
+function formatDate(value: string | number) {
+  return new Date(value).toLocaleString([], {
+    month: 'short',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+}
+
+function statusClass(status: string) {
+  const normalized = status.toLowerCase();
+  if (normalized.includes('fail') || normalized.includes('fire')) {
+    return 'status status-failed';
+  }
+
+  if (normalized.includes('run') || normalized.includes('busy')) {
+    return 'status status-running';
+  }
+
+  return 'status status-pending';
+}
+
 export default function SwarmControlPage() {
   const searchParams = useSearchParams();
   const [swarmInput, setSwarmInput] = useState('');
@@ -71,6 +101,9 @@ export default function SwarmControlPage() {
 
   const [jobs, setJobs] = useState<JobRow[]>([]);
   const [jobsMessage, setJobsMessage] = useState('');
+
+  const [tasks, setTasks] = useState<TaskRow[]>([]);
+  const [tasksMessage, setTasksMessage] = useState('');
 
   const [taskInput, setTaskInput] = useState('');
   const [requiredJob, setRequiredJob] = useState('');
@@ -211,6 +244,31 @@ export default function SwarmControlPage() {
       });
   }, [activeSwarmId, workspaceLoadedForSwarmId]);
 
+  useEffect(() => {
+    if (!activeSwarmId) {
+      setTasks([]);
+      return;
+    }
+
+    let mounted = true;
+    fetchJson<TaskRow[]>(`/tasks?swarm_id=${activeSwarmId}`)
+      .then((data) => {
+        if (mounted) {
+          setTasks(data);
+          setTasksMessage('');
+        }
+      })
+      .catch((err) => {
+        if (mounted) {
+          setTasksMessage(err instanceof Error ? err.message : 'Failed to load tasks');
+        }
+      });
+
+    return () => {
+      mounted = false;
+    };
+  }, [activeSwarmId]);
+
   async function loadJobs() {
     if (!activeSwarmId) {
       setJobsMessage('Enter a valid swarm ID or exact swarm name first');
@@ -259,6 +317,12 @@ export default function SwarmControlPage() {
 
       setTaskMessage(`Queued ${result.parsed} task(s)`);
       setTaskInput('');
+
+      if (activeSwarmId) {
+        fetchJson<TaskRow[]>(`/tasks?swarm_id=${activeSwarmId}`)
+          .then(setTasks)
+          .catch(() => {});
+      }
     } catch (err) {
       setTaskMessage(err instanceof Error ? err.message : 'Failed to submit tasks');
     } finally {
@@ -547,6 +611,43 @@ export default function SwarmControlPage() {
             ) : (
               <div className="emptyState">
                 No roles yet. Use <a href={canAct ? `/roles/create?swarmId=${encodeURIComponent(activeSwarmIdValue)}` : '/roles/create'} style={{ color: 'var(--accent)', textDecoration: 'underline' }}>Create Role</a> to add to the global catalog, then <a href={canAct ? `/swarms/manage-roles?swarmId=${encodeURIComponent(activeSwarmIdValue)}` : '/swarms/manage-roles'} style={{ color: 'var(--accent)', textDecoration: 'underline' }}>Assign Roles</a> for this swarm.
+              </div>
+            )}
+          </article>
+
+          <article className="formCard">
+            <div className="sectionHeader">
+              <h2>Current tasks</h2>
+              <span className="tag">{tasks.length} total</span>
+            </div>
+            {tasksMessage ? <div className="notice error">{tasksMessage}</div> : null}
+            {tasks.length > 0 ? (
+              <table className="table">
+                <thead>
+                  <tr>
+                    <th>Description</th>
+                    <th>Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {tasks.map((task) => (
+                    <tr key={task.id}>
+                      <td>
+                        <div className="listTitle">{task.description}</div>
+                        <div className="listSub" style={{ fontSize: '0.8rem', opacity: 0.7 }}>
+                          Created: {formatDate(task.created_at)}
+                        </div>
+                      </td>
+                      <td>
+                        <span className={statusClass(task.status)}>{task.status}</span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            ) : (
+              <div className="emptyState">
+                No tasks assigned to this swarm yet. Use the form below to submit tasks.
               </div>
             )}
           </article>
