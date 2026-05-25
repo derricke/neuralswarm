@@ -38,6 +38,8 @@ Thumbs.db
 graphify-out
 .agents/
 .gemini
+.claude
 product_docs
+.vscode
 
 TODO
