@@ -119,7 +119,7 @@ export default function SwarmControlPage() {
   useEffect(() => {
     const requestedSwarmId = searchParams.get('swarmId')?.trim();
     if (requestedSwarmId) {
-      setSelectedSwarmId(null);
+      setSelectedSwarmId(requestedSwarmId);
       setSwarmInput(requestedSwarmId);
     }
   }, [searchParams]);
