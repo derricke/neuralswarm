@@ -2,7 +2,8 @@ import OpenAI from 'openai';
 import type { EmbeddingProvider } from './types';
 
 const DEFAULT_MODEL = 'text-embedding-3-small';
-const DEFAULT_GOOGLE_EMBEDDING_MODEL = 'text-embedding-004';
+const DEFAULT_GOOGLE_EMBEDDING_MODEL = 'gemini-embedding-001';
+const GOOGLE_EMBEDDING_MODEL_FALLBACKS = ['gemini-embedding-001', 'text-embedding-004'] as const;
 const DEFAULT_OLLAMA_EMBEDDING_MODEL = 'nomic-embed-text';
 
 type EmbeddingProviderName = 'openai' | 'google' | 'openai_compatible' | 'ollama';
@@ -106,37 +107,67 @@ export class OpenAIEmbeddingProvider implements EmbeddingProvider {
 export class GoogleEmbeddingProvider implements EmbeddingProvider {
   constructor(private readonly model = DEFAULT_GOOGLE_EMBEDDING_MODEL) {}
 
+  private getModelCandidates(): string[] {
+    const ordered = [this.model, ...GOOGLE_EMBEDDING_MODEL_FALLBACKS];
+    return Array.from(new Set(ordered));
+  }
+
   async embed(text: string): Promise<number[]> {
     const apiKey = requireApiKey('GOOGLE_API_KEY');
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/${this.model}:embedContent?key=${encodeURIComponent(apiKey)}`;
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        content: {
-          parts: [{ text }],
+    const modelsTried: string[] = [];
+    let lastErrorMessage = 'google embedding request failed';
+
+    for (const model of this.getModelCandidates()) {
+      modelsTried.push(model);
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:embedContent?key=${encodeURIComponent(apiKey)}`;
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
         },
-      }),
-    });
+        body: JSON.stringify({
+          content: {
+            parts: [{ text }],
+          },
+        }),
+      });
 
-    if (!response.ok) {
-      throw new Error(`google embedding request failed: ${response.status} ${response.statusText}`);
-    }
+      if (!response.ok) {
+        let details = '';
+        try {
+          const errorPayload = (await response.json()) as {
+            error?: { message?: string };
+          };
+          details = errorPayload.error?.message ? ` - ${errorPayload.error.message}` : '';
+        } catch {
+          // Keep base status text when response body is not JSON.
+        }
 
-    const payload = (await response.json()) as {
-      embedding?: {
-        values?: unknown;
+        lastErrorMessage = `google embedding request failed for model=${model}: ${response.status} ${response.statusText}${details}`;
+
+        // If the model is not found, try fallback candidates.
+        if (response.status === 404) {
+          continue;
+        }
+
+        throw new Error(lastErrorMessage);
+      }
+
+      const payload = (await response.json()) as {
+        embedding?: {
+          values?: unknown;
+        };
       };
-    };
 
-    const values = payload.embedding?.values;
-    if (!Array.isArray(values)) {
-      throw new Error('google embedding response missing numeric values');
+      const values = payload.embedding?.values;
+      if (!Array.isArray(values)) {
+        throw new Error(`google embedding response missing numeric values for model=${model}`);
+      }
+
+      return values.map((value) => Number(value));
     }
 
-    return values.map((value) => Number(value));
+    throw new Error(`${lastErrorMessage}; modelsTried=${modelsTried.join(',')}`);
   }
 }
 
