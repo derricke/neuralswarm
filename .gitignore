@@ -37,5 +37,7 @@ Thumbs.db
 .github/copilot-instructions.md
 graphify-out
 .agents/
+.gemini
+product_docs
 
 TODO
