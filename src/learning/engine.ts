@@ -1,3 +1,4 @@
+import { QdrantClient } from '@qdrant/js-client-rest';
 import { getDb } from '../lib/db';
 import { logger } from '../lib/logger';
 import { logTrajectory } from '../memory/trajectoryStore';
@@ -12,36 +13,25 @@ import type { AgentRecommendation, EmbeddingProvider, LearningEngineOptions, Tra
 import type { TrajectoryRecord } from '../memory/trajectoryStore';
 import type { AgentProvider } from '../agents/types';
 
-type HnswIndex = {
-  initIndex(maxElements: number, m?: number, efConstruction?: number, randomSeed?: number): void;
-  resizeIndex(newSize: number): void;
-  addPoint(point: number[], label: number): void;
-  searchKnn(point: number[], k: number): { neighbors: number[]; distances: number[] };
-  getCurrentCount(): number;
-  writeIndex(path: string): void;
-  readIndex(path: string, maxElements: number, allowReplaceDeleted: boolean): void;
-};
-
 const DEFAULT_DIMENSION = 1536;
 const DEFAULT_MAX_ELEMENTS = 10_000;
 const EMBEDDING_DIMENSION_PROBE_TEXT = 'neuralswarm:embedding-dimension-probe';
+const COLLECTION_NAME = 'trajectories';
 
-type LearningMode = 'hnsw_active' | 'db_only_disabled' | 'db_only_fallback' | 'pending_init';
+type LearningMode = 'qdrant_active' | 'db_only_disabled' | 'db_only_fallback' | 'pending_init';
 
 type ProbeStatus = 'not_run' | 'passed' | 'skipped' | 'failed' | 'disabled';
 
 class LearningEngine {
-  private index: HnswIndex | null = null;
-  private hnswlibModule: any = null;
-  private labelToTrajectoryId = new Map<number, string>();
-  private trajectoryIdToLabel = new Map<string, number>();
-  private nextLabel = 0;
+  private client: QdrantClient | null = null;
+  private qdrantReady = false;
   private initialized = false;
   private probeStatus: ProbeStatus = 'not_run';
   private probeMessage: string | null = null;
   private embeddingsUnavailableReason: string | null = null;
   private dimension: number;
   private readonly isDimensionPinned: boolean;
+  private indexSize = 0;
 
   constructor(
     private readonly embedder: EmbeddingProvider = new AutoEmbeddingProvider(),
@@ -53,6 +43,11 @@ class LearningEngine {
   }
 
   async rebuildFromDatabase(): Promise<void> {
+    if (!this.client) {
+      this.initialized = true;
+      return;
+    }
+
     const rows = getDb()
       .prepare(
         `SELECT id, swarm_id, provider, model, description, result, success, embedding
@@ -61,58 +56,39 @@ class LearningEngine {
       )
       .all() as TrajectoryEmbeddingRow[];
 
-    try {
-      this.index = await this.createIndex(Math.max(this.maxElements, rows.length + 1));
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : String(error);
-      this.index = null;
-      this.labelToTrajectoryId.clear();
-      this.trajectoryIdToLabel.clear();
-      this.nextLabel = 0;
-      this.initialized = true;
-
-      if (errorMessage === 'hnsw_disabled') {
-        logger.info('learning index disabled; using DB-only recommendations');
-      } else {
-        logger.warn({ error: errorMessage }, 'learning index unavailable; using DB-only recommendations');
-      }
-      return;
-    }
-
-    this.labelToTrajectoryId.clear();
-    this.trajectoryIdToLabel.clear();
-    this.nextLabel = 0;
-
     let skippedInvalid = 0;
+    const points: Array<{ id: string; vector: number[]; payload: any }> = [];
+
     for (const row of rows) {
       const embedding = deserializeEmbedding(row.embedding as Buffer);
       if (!this.isValidEmbedding(embedding)) {
         skippedInvalid++;
         continue;
       }
+      
+      points.push({
+        id: row.id,
+        vector: embedding,
+        payload: {
+          swarm_id: row.swarm_id,
+          success: row.success
+        }
+      });
+    }
 
-      const label = this.nextLabel++;
+    if (points.length > 0) {
       try {
-        this.index.addPoint(embedding, label);
+        await this.client.upsert(COLLECTION_NAME, { points });
+        this.indexSize = points.length;
       } catch (error) {
-        skippedInvalid++;
-        logger.warn(
-          {
-            trajectoryId: row.id,
-            error: error instanceof Error ? error.message : String(error),
-          },
-          'failed to add trajectory embedding to index'
-        );
-        continue;
+        logger.warn({ error: error instanceof Error ? error.message : String(error) }, 'failed to rebuild qdrant index');
+        this.qdrantReady = false;
       }
-
-      this.labelToTrajectoryId.set(label, row.id);
-      this.trajectoryIdToLabel.set(row.id, label);
     }
 
     this.initialized = true;
     logger.info(
-      { trajectoriesIndexed: this.nextLabel, trajectoriesSkipped: skippedInvalid },
+      { trajectoriesIndexed: points.length, trajectoriesSkipped: skippedInvalid },
       'learning engine index rebuilt'
     );
   }
@@ -120,7 +96,44 @@ class LearningEngine {
   async initialize(): Promise<void> {
     if (this.initialized) return;
 
+    if (process.env.LEARNING_DISABLE_QDRANT === '1' || process.env.LEARNING_DISABLE_HNSW === '1') {
+      logger.info('learning index disabled by env var');
+      this.initialized = true;
+      return;
+    }
+
     await this.runStartupDimensionProbe();
+    
+    if (this.embeddingsUnavailableReason || this.probeStatus === 'failed') {
+      this.initialized = true;
+      return;
+    }
+
+    try {
+      this.client = new QdrantClient({ url: process.env.QDRANT_URL || 'http://localhost:6333' });
+      
+      const collections = await this.client.getCollections();
+      const exists = collections.collections.some((c) => c.name === COLLECTION_NAME);
+      
+      if (!exists) {
+        await this.client.createCollection(COLLECTION_NAME, {
+          vectors: {
+            size: this.dimension,
+            distance: 'Cosine'
+          }
+        });
+      }
+      
+      this.qdrantReady = true;
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      this.client = null;
+      this.qdrantReady = false;
+      logger.warn({ error: errorMessage }, 'qdrant unavailable; using DB-only recommendations');
+      this.initialized = true;
+      return;
+    }
+
     await this.rebuildFromDatabase();
   }
 
@@ -134,16 +147,15 @@ class LearningEngine {
     probeMessage: string | null;
     envDisabled: boolean;
   } {
-    const envDisabled = process.env.LEARNING_DISABLE_HNSW === '1';
-    const indexReady = this.index !== null;
+    const envDisabled = process.env.LEARNING_DISABLE_QDRANT === '1' || process.env.LEARNING_DISABLE_HNSW === '1';
 
     let mode: LearningMode;
     if (envDisabled) {
       mode = 'db_only_disabled';
     } else if (!this.initialized) {
       mode = 'pending_init';
-    } else if (indexReady) {
-      mode = 'hnsw_active';
+    } else if (this.qdrantReady) {
+      mode = 'qdrant_active';
     } else {
       mode = 'db_only_fallback';
     }
@@ -151,8 +163,8 @@ class LearningEngine {
     return {
       mode,
       initialized: this.initialized,
-      indexReady,
-      indexSize: this.nextLabel,
+      indexReady: this.qdrantReady,
+      indexSize: this.indexSize,
       dimension: this.dimension,
       probeStatus: this.probeStatus,
       probeMessage: this.probeMessage,
@@ -161,9 +173,9 @@ class LearningEngine {
   }
 
   private async runStartupDimensionProbe(): Promise<void> {
-    if (process.env.LEARNING_DISABLE_HNSW === '1') {
+    if (process.env.LEARNING_DISABLE_QDRANT === '1' || process.env.LEARNING_DISABLE_HNSW === '1') {
       this.probeStatus = 'disabled';
-      this.probeMessage = 'hnsw disabled by LEARNING_DISABLE_HNSW=1';
+      this.probeMessage = 'qdrant disabled by LEARNING_DISABLE_HNSW=1';
       return;
     }
 
@@ -179,7 +191,7 @@ class LearningEngine {
       if (!Array.isArray(probe)) {
         this.probeStatus = 'failed';
         this.probeMessage = 'probe returned non-array embedding';
-        logger.warn('learning dimension probe returned non-array embedding; disabling hnsw');
+        logger.warn('learning dimension probe returned non-array embedding; disabling qdrant');
         process.env.LEARNING_DISABLE_HNSW = '1';
         return;
       }
@@ -205,7 +217,7 @@ class LearningEngine {
             expectedDimension: this.dimension,
             actualDimension: probe.length,
           },
-          'embedding dimension mismatch detected; disabling hnsw'
+          'embedding dimension mismatch detected; disabling qdrant'
         );
         process.env.LEARNING_DISABLE_HNSW = '1';
         return;
@@ -222,7 +234,7 @@ class LearningEngine {
         this.probeStatus = 'skipped';
         this.probeMessage = `embedding unavailable: ${errorMessage}`;
         this.embeddingsUnavailableReason = errorMessage;
-        logger.info({ error: errorMessage }, 'learning embeddings unavailable; disabling hnsw');
+        logger.info({ error: errorMessage }, 'learning embeddings unavailable; disabling qdrant');
         process.env.LEARNING_DISABLE_HNSW = '1';
         return;
       }
@@ -231,7 +243,7 @@ class LearningEngine {
       this.probeMessage = errorMessage;
       logger.warn(
         { error: errorMessage },
-        'learning dimension probe failed; disabling hnsw'
+        'learning dimension probe failed; disabling qdrant'
       );
       process.env.LEARNING_DISABLE_HNSW = '1';
     }
@@ -265,8 +277,8 @@ class LearningEngine {
       embedding,
     });
 
-    if (embedding) {
-      this.addToIndex(trajectoryId, embedding);
+    if (embedding && this.client && this.qdrantReady) {
+      await this.addToIndex(trajectoryId, embedding, record.swarmId, record.success ? 1 : 0);
     }
 
     return trajectoryId;
@@ -316,7 +328,7 @@ class LearningEngine {
     await this.initialize();
 
     if (this.embeddingsUnavailableReason) return [];
-    if (!this.index || this.nextLabel === 0) return [];
+    if (!this.client || !this.qdrantReady) return [];
 
     let queryEmbedding: number[];
 
@@ -338,29 +350,25 @@ class LearningEngine {
       return [];
     }
 
-    let search;
+    let searchResults;
     try {
-      search = this.index.searchKnn(queryEmbedding, Math.min(limit * 4, this.nextLabel));
+      searchResults = await this.client.search(COLLECTION_NAME, {
+        vector: queryEmbedding,
+        limit: Math.min(limit * 4, 10000),
+      });
     } catch (error) {
       logger.warn(
         { swarmId, error: error instanceof Error ? error.message : String(error) },
-        'hnsw search failed; falling back to DB-only recommendations'
+        'qdrant search failed; falling back to DB-only recommendations'
       );
       return [];
     }
 
-    const distancesByLabel = new Map<number, number>();
-
-    search.neighbors.forEach((label, index) => {
-      distancesByLabel.set(label, search.distances[index] ?? Number.POSITIVE_INFINITY);
-    });
-
     const db = getDb();
     const matches: Array<{ id: string; provider: AgentProvider; model: string; distance: number; score: number }> = [];
 
-    for (const [label, distance] of distancesByLabel.entries()) {
-      const trajectoryId = this.labelToTrajectoryId.get(label);
-      if (!trajectoryId) continue;
+    for (const match of searchResults) {
+      const trajectoryId = String(match.id);
 
       const row = db
         .prepare(
@@ -378,79 +386,35 @@ class LearningEngine {
         id: row.id,
         provider: row.provider as AgentProvider,
         model: row.model,
-        distance,
-        score: 1 / (1 + distance),
+        distance: Math.max(0, 1 - Number(match.score)),
+        score: Number(match.score),
       });
     }
-
+    
     return matches.sort((a, b) => b.score - a.score).slice(0, limit);
   }
 
-  private async createIndex(maxElements: number): Promise<HnswIndex> {
-    if (process.env.LEARNING_DISABLE_HNSW === '1') {
-      throw new Error('hnsw_disabled');
-    }
-
-    if (!this.hnswlibModule) {
-      const { loadHnswlib } = await import('hnswlib-wasm');
-      this.hnswlibModule = await loadHnswlib();
-    }
-
-    const index = new this.hnswlibModule.HierarchicalNSW('l2', this.dimension) as unknown as HnswIndex;
-    index.initIndex(maxElements);
-    return index;
-  }
-
-  async saveIndex(physicalPath: string): Promise<void> {
-    if (!this.index || !this.hnswlibModule) throw new Error('Index not initialized');
-
-    const virtualPath = 'temp_virtual.dat';
-    this.index.writeIndex(virtualPath);
-    const buffer = this.hnswlibModule.EmscriptenFileSystemManager.readFile(virtualPath);
-    const fs = await import('fs/promises');
-    await fs.writeFile(physicalPath, buffer);
-  }
-
-  async loadIndex(physicalPath: string, maxElements: number = this.maxElements): Promise<void> {
-    if (!this.hnswlibModule) {
-      const { loadHnswlib } = await import('hnswlib-wasm');
-      this.hnswlibModule = await loadHnswlib();
-    }
-
-    const virtualPath = 'temp_virtual.dat';
-    const fs = await import('fs/promises');
-    const buffer = await fs.readFile(physicalPath);
-    this.hnswlibModule.EmscriptenFileSystemManager.writeFile(virtualPath, buffer);
-
-    const index = new this.hnswlibModule.HierarchicalNSW('l2', this.dimension) as unknown as HnswIndex;
-    index.readIndex(virtualPath, maxElements, false);
-
-    this.index = index;
-    this.initialized = true;
-  }
-
-  private addToIndex(trajectoryId: string, embedding: number[]): void {
-    if (!this.index) return;
+  private async addToIndex(trajectoryId: string, embedding: number[], swarmId: string, success: number): Promise<void> {
+    if (!this.client || !this.qdrantReady) return;
     if (!this.isValidEmbedding(embedding)) return;
 
-    if (this.index.getCurrentCount() >= this.maxElements) {
-      this.index.resizeIndex(this.maxElements * 2);
-    }
-
-    const label = this.nextLabel++;
     try {
-      this.index.addPoint(embedding, label);
-      this.labelToTrajectoryId.set(label, trajectoryId);
-      this.trajectoryIdToLabel.set(trajectoryId, label);
+      await this.client.upsert(COLLECTION_NAME, {
+        points: [{
+          id: trajectoryId,
+          vector: embedding,
+          payload: { swarm_id: swarmId, success }
+        }]
+      });
+      this.indexSize++;
     } catch (error) {
       logger.warn(
         {
           trajectoryId,
           error: error instanceof Error ? error.message : String(error),
         },
-        'failed to add embedding to hnsw index'
+        'failed to add embedding to qdrant index'
       );
-      this.nextLabel--;
     }
   }
 

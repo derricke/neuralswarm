@@ -11,7 +11,7 @@ interface SystemMetrics {
   timestamp: string;
   uptime: number;
   learning: {
-    mode: 'hnsw_active' | 'db_only_disabled' | 'db_only_fallback' | 'pending_init';
+    mode: 'qdrant_active' | 'db_only_disabled' | 'db_only_fallback' | 'pending_init';
     initialized: boolean;
     index_ready: boolean;
     index_size: number;

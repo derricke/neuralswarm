@@ -15,6 +15,10 @@ import {
   isProviderAvailable,
   resolveDefaultProviderModel,
 } from '../agents/providerConfig';
+import { ModelRouter } from '../orchestration/ModelRouter';
+import { globalUsageTracker } from '../metrics/UsageTracker';
+
+const modelRouter = new ModelRouter();
 
 const MAX_RETRIES = 3;
 const RETRY_BACKOFF_MS = [1000, 2000, 4000] as const;
@@ -263,12 +267,13 @@ export async function runTask(taskId: string): Promise<void> {
 
       const config: AgentConfig = {
         provider: agent.provider,
-        model: selectExecutionModel({
+        model: await selectExecutionModelAsync({
           provider: agent.provider,
           currentModel: agent.model,
           complexity: task.complexity,
           attempt,
           recommendation,
+          description: task.description,
         }),
         systemPrompt,
         temperature: typeProfile.temperature,
@@ -288,6 +293,14 @@ export async function runTask(taskId: string): Promise<void> {
       db.prepare(
         `UPDATE tasks SET status = 'completed', result = ?, updated_at = unixepoch() WHERE id = ?`
       ).run(result.output, taskId);
+
+      globalUsageTracker.recordUsage(
+        config.model,
+        agent.id,
+        result.inputTokens ?? 0,
+        0,
+        result.outputTokens ?? 0
+      );
 
       db.prepare(
         `UPDATE agents SET status = 'idle', consecutive_failures = 0, updated_at = unixepoch() WHERE id = ?`
@@ -585,27 +598,33 @@ function getTierModelOverride(tier: 'CHEAP' | 'ADVANCED', provider: AgentProvide
   return value && value.length > 0 ? value : null;
 }
 
-function selectExecutionModel(input: {
+async function selectExecutionModelAsync(input: {
   provider: AgentProvider;
   currentModel: string;
   complexity: 'high' | 'low';
   attempt: number;
   recommendation: { provider: AgentProvider; model: string } | null;
-}): string {
-  const { provider, currentModel, complexity, attempt, recommendation } = input;
+  description: string;
+}): Promise<string> {
+  const { provider, currentModel, complexity, attempt, recommendation, description } = input;
 
   // If learning recommends a model for this provider, prefer it.
   if (recommendation?.provider === provider && recommendation.model.trim().length > 0) {
     return recommendation.model;
   }
 
-  // Low complexity starts on cheap model for cost efficiency.
-  if (attempt === 0 && complexity === 'low') {
-    return getCheapModel(provider);
+  // Dynamic routing based on prompt using ModelRouter
+  if (attempt === 0) {
+    const decision = await modelRouter.determineRequiredModel(description);
+    if (decision.tier === 'flash') {
+      return getCheapModel(provider);
+    } else {
+      return getAdvancedModel(provider);
+    }
   }
 
-  // High complexity or retries should run on stronger models.
-  if (complexity === 'high' || attempt > 0) {
+  // Retries should run on stronger models.
+  if (attempt > 0) {
     return getAdvancedModel(provider);
   }
 

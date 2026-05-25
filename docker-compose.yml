@@ -1,5 +1,4 @@
 version: '3.8'
-
 services:
   neuralswarm:
     build:
@@ -13,3 +12,22 @@ services:
     env_file:
       - .env
     restart: unless-stopped
+    depends_on:
+      - qdrant
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+  qdrant:
+    image: qdrant/qdrant:latest
+    container_name: neuralswarm-memory
+    ports:
+      - "6333:6333"
+      - "6334:6334"
+    volumes:
+      - ./data/qdrant:/qdrant/storage
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 1G

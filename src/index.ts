@@ -35,13 +35,13 @@ function parsePositiveInt(value: string | undefined): number | null {
 }
 
 function describeHnswRuntimeStatus(status: {
-  mode: 'hnsw_active' | 'db_only_disabled' | 'db_only_fallback' | 'pending_init';
+  mode: 'qdrant_active' | 'db_only_disabled' | 'db_only_fallback' | 'pending_init';
   probeStatus: 'not_run' | 'passed' | 'skipped' | 'failed' | 'disabled';
   probeMessage: string | null;
   envDisabled: boolean;
   indexReady: boolean;
 }): string {
-  if (status.mode === 'hnsw_active' && status.indexReady) {
+  if (status.mode === 'qdrant_active' && status.indexReady) {
     return 'enabled: hnsw index active';
   }
 
@@ -171,8 +171,8 @@ const server = app.listen(PORT, () => {
       logger.info(
         {
           bootId,
-          hnswEnabled: learning.mode === 'hnsw_active' && learning.indexReady,
-          reason: describeHnswRuntimeStatus(learning),
+          hnswEnabled: learning.mode === 'qdrant_active' && learning.indexReady,
+          reason: describeHnswRuntimeStatus(learning as any),
           mode: learning.mode,
           probeStatus: learning.probeStatus,
           probeMessage: learning.probeMessage,

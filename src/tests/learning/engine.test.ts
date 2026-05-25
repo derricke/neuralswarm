@@ -3,6 +3,40 @@ import { createLearningEngine } from '../../learning/engine';
 import { getDb, resetDb } from '../../lib/db';
 import type { EmbeddingProvider } from '../../learning/types';
 
+jest.mock('@qdrant/js-client-rest', () => {
+  return {
+    QdrantClient: class MockQdrantClient {
+      private points = new Map<string, { id: string; vector: number[]; payload: any }>();
+      
+      async getCollections() {
+        return { collections: [{ name: 'trajectories' }] };
+      }
+      
+      async createCollection() {}
+      
+      async upsert(collectionName: string, { points }: { points: any[] }) {
+        for (const p of points) {
+          this.points.set(String(p.id), p);
+        }
+      }
+      
+      async search(collectionName: string, { vector, limit }: { vector: number[]; limit: number }) {
+        const dotProduct = (a: number[], b: number[]) => a.reduce((sum, val, i) => sum + val * b[i], 0);
+        const magnitude = (v: number[]) => Math.sqrt(v.reduce((sum, val) => sum + val * val, 0));
+        
+        const results = Array.from(this.points.values()).map(p => {
+          const m1 = magnitude(p.vector);
+          const m2 = magnitude(vector);
+          const score = m1 && m2 ? dotProduct(p.vector, vector) / (m1 * m2) : 0;
+          return { id: p.id, score, payload: p.payload };
+        });
+        
+        return results.sort((a, b) => b.score - a.score).slice(0, limit);
+      }
+    }
+  };
+});
+
 class FakeEmbedder implements EmbeddingProvider {
   private readonly vectors = new Map<string, number[]>();
   private static readonly PROBE_TEXT = 'neuralswarm:embedding-dimension-probe';

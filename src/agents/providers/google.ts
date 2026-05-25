@@ -2,6 +2,7 @@ import { GoogleGenAI, HarmCategory, HarmBlockThreshold, Content, Part, Tool } fr
 import type { AgentConfig, AgentResult } from '../types';
 import { connectMcpServers, getMcpTools, executeMcpTool, disconnectMcpServers, McpClientMap } from '../mcp';
 import { logger } from '../../lib/logger';
+import { ContextManager } from '../../memory/ContextManager';
 
 const DEFAULT_MAX_TOOL_TURNS = 12;
 
@@ -58,7 +59,8 @@ export async function runGoogleAgent(
   }
 
   const systemInstruction = config.systemPrompt ?? 'You are a helpful assistant. Complete the task concisely.';
-  const contents: Content[] = [{ role: 'user', parts: [{ text: task }] }];
+  let contents: Content[] = [{ role: 'user', parts: [{ text: task }] }];
+  const contextManager = new ContextManager();
 
   let finalOutput = '';
   let totalInputTokens = 0;
@@ -113,6 +115,21 @@ export async function runGoogleAgent(
       
       // Append model response to history
       contents.push({ role: 'model', parts });
+
+      const currentTokenCount = contextManager.extractTokenCount(usage);
+      
+      const messages = contents.map(c => ({
+        role: c.role || 'user',
+        content: c.parts?.map(p => p.text || '').join('') || ''
+      }));
+
+      const compressed = await contextManager.checkAndCompressContext(messages, currentTokenCount);
+      if (compressed) {
+        contents = compressed.map(m => ({
+          role: m.role,
+          parts: [{ text: m.content }]
+        }));
+      }
 
       const textParts = parts.filter(p => p.text);
       const textChunk = textParts.map(p => p.text).join('');
