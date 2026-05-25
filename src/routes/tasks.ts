@@ -8,7 +8,7 @@ import { trajectoryEmitter } from '../coordinator/emitter';
 export const tasksRouter = Router();
 
 const SubmitTasksSchema = z.object({
-  swarm_id: z.string().uuid().optional(),
+  swarm_id: z.string().trim().min(1).optional(),
   input: z.string().min(1),
   required_job: z.string().min(1).optional(),
 });
@@ -101,7 +101,7 @@ tasksRouter.post('/', (req: Request, res: Response) => {
 });
 
 const AssignTaskSchema = z.object({
-  swarm_id: z.string().uuid().nullable()
+  swarm_id: z.string().trim().min(1).nullable()
 });
 
 // PUT /tasks/:id/assign — assign or unassign a task from a swarm
@@ -197,14 +197,47 @@ tasksRouter.get('/:id/live', (req: Request, res: Response) => {
 tasksRouter.get('/', (req: Request, res: Response) => {
   const db = getDb();
   const swarmId = typeof req.query.swarm_id === 'string' ? req.query.swarm_id : undefined;
+  const includeMeta = String(req.query.include_meta ?? '').toLowerCase() === 'true';
+  const rawLimit = parseInt(String(req.query.limit ?? '100'), 10);
+  const rawOffset = parseInt(String(req.query.offset ?? '0'), 10);
+  const limit = Number.isFinite(rawLimit) ? Math.min(Math.max(rawLimit, 1), 500) : 100;
+  const offset = Number.isFinite(rawOffset) ? Math.max(rawOffset, 0) : 0;
 
   let tasks;
+  let total = 0;
   if (swarmId === 'null') {
-    tasks = db.prepare('SELECT * FROM tasks WHERE swarm_id IS NULL ORDER BY created_at DESC').all();
+    total = (
+      db.prepare('SELECT COUNT(*) as count FROM tasks WHERE swarm_id IS NULL').get() as { count: number }
+    ).count;
+    tasks = db
+      .prepare('SELECT * FROM tasks WHERE swarm_id IS NULL ORDER BY created_at DESC LIMIT ? OFFSET ?')
+      .all(limit, offset);
   } else if (swarmId) {
-    tasks = db.prepare('SELECT * FROM tasks WHERE swarm_id = ? ORDER BY created_at DESC').all(swarmId);
+    total = (
+      db.prepare('SELECT COUNT(*) as count FROM tasks WHERE swarm_id = ?').get(swarmId) as { count: number }
+    ).count;
+    tasks = db
+      .prepare('SELECT * FROM tasks WHERE swarm_id = ? ORDER BY created_at DESC LIMIT ? OFFSET ?')
+      .all(swarmId, limit, offset);
   } else {
-    tasks = db.prepare('SELECT * FROM tasks ORDER BY created_at DESC').all();
+    total = (db.prepare('SELECT COUNT(*) as count FROM tasks').get() as { count: number }).count;
+    tasks = db
+      .prepare('SELECT * FROM tasks ORDER BY created_at DESC LIMIT ? OFFSET ?')
+      .all(limit, offset);
+  }
+
+  if (includeMeta) {
+    res.json({
+      items: tasks,
+      pagination: {
+        total,
+        returned: tasks.length,
+        limit,
+        offset,
+        hasMore: offset + tasks.length < total,
+      },
+    });
+    return;
   }
 
   res.json(tasks);

@@ -1,14 +1,20 @@
 import { randomUUID } from 'crypto';
+import { resolve } from 'path';
 import { getDb } from '../lib/db';
 import { spawnAgent } from '../agents/spawner';
 import { logger } from '../lib/logger';
 import { logTrajectory } from '../memory/trajectoryStore';
 import { getLearningEngine } from '../learning/engine';
 import { getOrCreateAgentTypeProfile, updateAgentTypeProfileAfterTask } from '../agents/typeProfile';
-import { updateGlobalJobFailurePatterns } from '../jobs/jobManager';
+import { updateGlobalRoleFailurePatterns } from '../roles/roleManager';
 import { dispatchTask } from './dispatcher';
 import { trajectoryEmitter } from './emitter';
 import type { AgentConfig, AgentProvider } from '../agents/types';
+import {
+  hasOpenAICompatibleConfig,
+  isProviderAvailable,
+  resolveDefaultProviderModel,
+} from '../agents/providerConfig';
 
 const MAX_RETRIES = 3;
 const RETRY_BACKOFF_MS = [1000, 2000, 4000] as const;
@@ -31,6 +37,7 @@ type AgentRow = {
 type SwarmRow = {
   id: string;
   status: string;
+  config?: string | null;
 };
 
 type TaskRow = {
@@ -64,10 +71,32 @@ type StartSwarmResult = {
   queuedTasks: number;
 };
 
-const DEFAULT_PROVIDER: AgentProvider = 'openai';
-const DEFAULT_MODEL = 'gpt-4o';
+function getDefaultAgentConfig(): { provider: AgentProvider; model: string } {
+  return resolveDefaultProviderModel();
+}
+
+let _defaultsLogged = false;
+function logDefaultAgentConfigOnce(): void {
+  if (_defaultsLogged) return;
+  _defaultsLogged = true;
+
+  const defaults = getDefaultAgentConfig();
+  logger.info(
+    {
+      provider: defaults.provider,
+      model: defaults.model,
+      hasGoogleKey: Boolean(process.env.GOOGLE_API_KEY),
+      hasOpenAIKey: Boolean(process.env.OPENAI_API_KEY),
+      hasAnthropicKey: Boolean(process.env.ANTHROPIC_API_KEY),
+      hasOpenAICompatibleConfig: hasOpenAICompatibleConfig(),
+    },
+    'default agent config selected from environment'
+  );
+}
 
 export async function startSwarm(swarmId: string): Promise<StartSwarmResult> {
+  logDefaultAgentConfigOnce();
+
   const db = getDb();
   const swarm = db.prepare('SELECT id, status FROM swarms WHERE id = ?').get(swarmId) as SwarmRow | undefined;
 
@@ -99,6 +128,60 @@ type ProviderBlacklistRow = {
   provider: string;
   blacklisted_until: number;
 };
+
+function getDefaultWorkspaceDir(): string {
+  const fromEnv = process.env.NEURALSWARM_WORKSPACE_DIR?.trim();
+  if (fromEnv) {
+    return resolve(fromEnv);
+  }
+
+  return process.cwd();
+}
+
+function getSwarmWorkspaceDir(swarmId: string): string {
+  const db = getDb();
+  const row = db
+    .prepare('SELECT config FROM swarms WHERE id = ?')
+    .get(swarmId) as { config: string | null } | undefined;
+
+  if (!row?.config) {
+    return getDefaultWorkspaceDir();
+  }
+
+  try {
+    const config = JSON.parse(row.config) as { workspaceDir?: unknown };
+    if (typeof config.workspaceDir === 'string' && config.workspaceDir.trim().length > 0) {
+      return resolve(config.workspaceDir);
+    }
+  } catch {
+    logger.warn({ swarmId }, 'invalid swarm config JSON; falling back to default workspace dir');
+  }
+
+  return getDefaultWorkspaceDir();
+}
+
+function resolveMcpServersForWorkspace(
+  swarmId: string,
+  rawMcpServers: AgentConfig['mcpServers']
+): AgentConfig['mcpServers'] {
+  if (!rawMcpServers || rawMcpServers.length === 0) {
+    return rawMcpServers;
+  }
+
+  const workspaceDir = getSwarmWorkspaceDir(swarmId);
+
+  return rawMcpServers.map((server) => {
+    const pkgIndex = server.args.findIndex((arg) => arg.includes('@modelcontextprotocol/server-filesystem'));
+    if (pkgIndex === -1) {
+      return server;
+    }
+
+    return {
+      ...server,
+      args: [...server.args.slice(0, pkgIndex + 1), workspaceDir],
+    };
+  });
+}
 
 export async function runTask(taskId: string): Promise<void> {
   const db = getDb();
@@ -180,11 +263,20 @@ export async function runTask(taskId: string): Promise<void> {
 
       const config: AgentConfig = {
         provider: agent.provider,
-        model: (attempt === 0 && task.complexity === 'low') ? getCheapModel(agent.provider) : agent.model,
+        model: selectExecutionModel({
+          provider: agent.provider,
+          currentModel: agent.model,
+          complexity: task.complexity,
+          attempt,
+          recommendation,
+        }),
         systemPrompt,
         temperature: typeProfile.temperature,
         maxTokens: typeProfile.top_k_tokens,
-        mcpServers: job?.mcp_servers ? JSON.parse(job.mcp_servers) : undefined,
+        mcpServers: resolveMcpServersForWorkspace(
+          task.swarm_id,
+          job?.mcp_servers ? JSON.parse(job.mcp_servers) : undefined
+        ),
         onStreamChunk: (chunk, type) => {
           trajectoryEmitter.emit('chunk', { taskId, chunk, type });
         }
@@ -250,7 +342,7 @@ export async function runTask(taskId: string): Promise<void> {
           const isSystemError = ['rate_limit', 'timeout', 'auth_error', 'provider_error'].includes(errorType);
           if (!isSystemError) {
             const actualError = err instanceof Error ? err.message : String(err);
-            updateGlobalJobFailurePatterns(job.global_job_id, task.description, actualError).catch(e => {
+            updateGlobalRoleFailurePatterns(job.global_job_id, task.description, actualError).catch(e => {
               logger.warn({ error: e }, 'failed to update job failure patterns');
             });
           }
@@ -300,7 +392,12 @@ async function safeRecommendAgentProfile(
   description: string
 ): Promise<{ provider: AgentProvider; model: string } | null> {
   try {
-    return await learningEngine.recommendAgentProfile(swarmId, description);
+    const rec = await learningEngine.recommendAgentProfile(swarmId, description);
+    if (rec && !isProviderAvailable(rec.provider)) {
+      logger.warn({ provider: rec.provider }, 'recommended provider key not configured; ignoring recommendation');
+      return null;
+    }
+    return rec;
   } catch (error) {
     logger.warn({ swarmId, error }, 'agent recommendation failed; falling back to idle-agent routing');
     return null;
@@ -388,6 +485,7 @@ function pickAgent(
 
   const eligible = candidates.filter(
     (a) =>
+      isProviderAvailable(a.provider) &&
       !blacklistedProviders.includes(a.provider) &&
       a.id !== excludeAgentId &&
       !isFired(a)
@@ -433,7 +531,7 @@ function pickAgentForJob(
     .all(swarmId, jobId) as AgentRow[];
 
   const eligible = candidates.filter(
-    (a) => !blacklistedProviders.includes(a.provider) && a.id !== excludeAgentId && !isFired(a)
+    (a) => isProviderAvailable(a.provider) && !blacklistedProviders.includes(a.provider) && a.id !== excludeAgentId && !isFired(a)
   );
 
   if (eligible.length === 0) return undefined;
@@ -456,12 +554,62 @@ function getSuccessRate(agent: AgentRow): number {
 }
 
 function getCheapModel(provider: AgentProvider): string {
+  const override = getTierModelOverride('CHEAP', provider);
+  if (override) return override;
+
   switch (provider) {
     case 'openai': return 'gpt-4o-mini';
+    case 'openai_compatible': return process.env.OPENAI_COMPATIBLE_DEFAULT_CHEAP_MODEL?.trim() || 'gpt-4o-mini';
     case 'anthropic': return 'claude-3-5-haiku-latest';
     case 'google': return 'gemini-2.5-flash';
     case 'ollama': return 'llama3';
   }
+}
+
+function getAdvancedModel(provider: AgentProvider): string {
+  const override = getTierModelOverride('ADVANCED', provider);
+  if (override) return override;
+
+  switch (provider) {
+    case 'openai': return 'gpt-4o';
+    case 'openai_compatible': return process.env.OPENAI_COMPATIBLE_DEFAULT_ADVANCED_MODEL?.trim() || 'gpt-4o';
+    case 'anthropic': return 'claude-3-5-sonnet-latest';
+    case 'google': return 'gemini-2.5-pro';
+    case 'ollama': return 'llama3';
+  }
+}
+
+function getTierModelOverride(tier: 'CHEAP' | 'ADVANCED', provider: AgentProvider): string | null {
+  const key = `NEURALSWARM_${tier}_MODEL_${provider.toUpperCase()}`;
+  const value = process.env[key]?.trim();
+  return value && value.length > 0 ? value : null;
+}
+
+function selectExecutionModel(input: {
+  provider: AgentProvider;
+  currentModel: string;
+  complexity: 'high' | 'low';
+  attempt: number;
+  recommendation: { provider: AgentProvider; model: string } | null;
+}): string {
+  const { provider, currentModel, complexity, attempt, recommendation } = input;
+
+  // If learning recommends a model for this provider, prefer it.
+  if (recommendation?.provider === provider && recommendation.model.trim().length > 0) {
+    return recommendation.model;
+  }
+
+  // Low complexity starts on cheap model for cost efficiency.
+  if (attempt === 0 && complexity === 'low') {
+    return getCheapModel(provider);
+  }
+
+  // High complexity or retries should run on stronger models.
+  if (complexity === 'high' || attempt > 0) {
+    return getAdvancedModel(provider);
+  }
+
+  return currentModel || getAdvancedModel(provider);
 }
 
 function getJobById(jobId: string, swarmId: string): JobRow | null {
@@ -518,24 +666,39 @@ async function hireAgentsForSwarm(
 
   if (jobs.length > 0) {
     for (const job of jobs) {
-      const existing = db
-        .prepare(`SELECT id FROM agents WHERE swarm_id = ? AND job_id = ? LIMIT 1`)
-        .get(swarmId, job.id) as { id: string } | undefined;
+      const existingForJob = db
+        .prepare(`SELECT * FROM agents WHERE swarm_id = ? AND job_id = ?`)
+        .all(swarmId, job.id) as AgentRow[];
 
-      if (!existing) {
-        registerAgent(swarmId, job.provider, job.model, job.id);
-        hired++;
+      const hasRunnableAgentForJob = existingForJob.some(
+        (agent) => isProviderAvailable(agent.provider) && !isFired(agent)
+      );
+      if (hasRunnableAgentForJob) {
+        continue;
       }
-    }
 
-    return hired;
+      const defaults = getDefaultAgentConfig();
+      const provider = isProviderAvailable(job.provider) ? job.provider : defaults.provider;
+      const model = isProviderAvailable(job.provider) ? job.model : defaults.model;
+
+      if (!isProviderAvailable(job.provider)) {
+        logger.info(
+          { swarmId, jobId: job.id, configuredProvider: job.provider, fallbackProvider: provider, fallbackModel: model },
+          'job provider unavailable; hiring fallback agent for job'
+        );
+      }
+
+      registerAgent(swarmId, provider, model, job.id);
+      hired++;
+    }
   }
 
-  const existingAgents = db
-    .prepare(`SELECT id FROM agents WHERE swarm_id = ? LIMIT 1`)
-    .all(swarmId) as Array<{ id: string }>;
+  const idleAgents = db
+    .prepare(`SELECT * FROM agents WHERE swarm_id = ? AND status = 'idle'`)
+    .all(swarmId) as AgentRow[];
 
-  if (existingAgents.length > 0) {
+  const hasRunnableIdleAgent = idleAgents.some((agent) => isProviderAvailable(agent.provider) && !isFired(agent));
+  if (hasRunnableIdleAgent) {
     return hired;
   }
 
@@ -544,10 +707,19 @@ async function hireAgentsForSwarm(
     return hired;
   }
 
-  const recommendation = await getLearningEngine().recommendAgentProfile(swarmId, firstPending.description);
-  const provider = recommendation?.provider ?? DEFAULT_PROVIDER;
-  const model = recommendation?.model ?? DEFAULT_MODEL;
+  let recommendation: { provider: AgentProvider; model: string } | null = null;
+  try {
+    recommendation = await getLearningEngine().recommendAgentProfile(swarmId, firstPending.description);
+  } catch (error) {
+    logger.warn({ swarmId, error }, 'agent recommendation failed during auto-hire; using defaults');
+  }
 
+  const defaults = getDefaultAgentConfig();
+  const filteredRec = recommendation && isProviderAvailable(recommendation.provider) ? recommendation : null;
+  const provider = filteredRec?.provider ?? defaults.provider;
+  const model = filteredRec?.model ?? defaults.model;
+
+  logger.info({ swarmId, provider, model }, 'auto-hiring fallback agent for pending tasks');
   registerAgent(swarmId, provider, model);
   hired++;
 

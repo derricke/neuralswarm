@@ -7,7 +7,7 @@ import { parseTaskInput } from '../lib/taskParser';
 export const uiRouter = Router();
 
 const UploadTasksSchema = z.object({
-  swarm_id: z.string().uuid(),
+  swarm_id: z.string().trim().min(1),
   input: z.string().min(1).max(10000),
   required_job: z.string().min(1).optional(),
 });

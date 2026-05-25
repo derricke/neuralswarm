@@ -2,8 +2,9 @@ import { randomUUID } from 'crypto';
 import { getDb } from '../lib/db';
 import { logger } from '../lib/logger';
 import { spawnAgent } from '../agents/spawner';
-import { createJob } from '../jobs/jobManager';
+import { createRole } from '../roles/roleManager';
 import type { AgentConfig, AgentProvider } from '../agents/types';
+import { isProviderAvailable, resolveDefaultProviderModel } from '../agents/providerConfig';
 
 export type DispatchResult =
   | { action: 'route'; jobId: string; complexity?: 'low' | 'high' }
@@ -19,17 +20,8 @@ function getDispatcherConfig(): AgentConfig {
     };
   }
 
-  if (process.env.GOOGLE_API_KEY) {
-    return { provider: 'google', model: 'gemini-2.5-flash', temperature: 0.1 };
-  }
-  if (process.env.OPENAI_API_KEY) {
-    return { provider: 'openai', model: 'gpt-4o-mini', temperature: 0.1 };
-  }
-  if (process.env.ANTHROPIC_API_KEY) {
-    return { provider: 'anthropic', model: 'claude-3-5-haiku-latest', temperature: 0.1 };
-  }
-  
-  return { provider: 'ollama', model: 'llama3', temperature: 0.1 };
+  const defaults = resolveDefaultProviderModel();
+  return { provider: defaults.provider, model: defaults.model, temperature: 0.1 };
 }
 
 export async function dispatchTask(taskId: string): Promise<DispatchResult> {
@@ -41,12 +33,25 @@ export async function dispatchTask(taskId: string): Promise<DispatchResult> {
   // If task already has a required job, no need to dispatch
   if (task.required_job) return { action: 'fallback' };
 
-  const jobs = db.prepare(`
-    SELECT sj.id, COALESCE(g.title, sj.title) as title, COALESCE(g.description, sj.description) as description 
+  const allJobs = db.prepare(`
+    SELECT
+      sj.id,
+      COALESCE(g.title, sj.title) as title,
+      COALESCE(g.description, sj.description) as description,
+      COALESCE(g.provider, sj.provider) as provider,
+      COALESCE(g.model, sj.model) as model
     FROM swarm_jobs sj 
     LEFT JOIN global_jobs g ON g.id = sj.global_job_id 
     WHERE sj.swarm_id = ?
-  `).all(task.swarm_id) as Array<{ id: string, title: string, description: string }>;
+  `).all(task.swarm_id) as Array<{
+    id: string;
+    title: string;
+    description: string;
+    provider: AgentProvider;
+    model: string;
+  }>;
+
+  const jobs = allJobs.filter((job) => isProviderAvailable(job.provider));
 
   const config = getDispatcherConfig();
 
@@ -104,7 +109,7 @@ Return ONLY the raw JSON object. Do not wrap in markdown tags like \`\`\`json.`;
     }
     
     if (decision.action === 'hire' && decision.new_job_title && decision.system_prompt) {
-      const newJob = await createJob(task.swarm_id, {
+      const newJob = await createRole(task.swarm_id, {
         title: decision.new_job_title,
         description: decision.description || decision.new_job_title,
         provider: config.provider,

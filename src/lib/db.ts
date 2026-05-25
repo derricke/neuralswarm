@@ -241,9 +241,13 @@ function runMigrations(db: Database.Database) {
   `);
 
   ensureColumnExists(db, 'tasks', 'required_job', 'TEXT REFERENCES swarm_jobs(id)');
+  ensureColumnExists(db, 'tasks', 'required_role', 'TEXT REFERENCES swarm_jobs(id)');
   ensureColumnExists(db, 'agents', 'job_id', 'TEXT REFERENCES swarm_jobs(id)');
+  ensureColumnExists(db, 'agents', 'role_id', 'TEXT REFERENCES swarm_jobs(id)');
   ensureColumnExists(db, 'trajectories', 'job_id', 'TEXT REFERENCES swarm_jobs(id)');
+  ensureColumnExists(db, 'trajectories', 'role_id', 'TEXT REFERENCES swarm_jobs(id)');
   ensureColumnExists(db, 'swarm_jobs', 'global_job_id', 'TEXT REFERENCES global_jobs(id) ON DELETE SET NULL');
+  ensureColumnExists(db, 'swarm_jobs', 'global_role_id', 'TEXT REFERENCES global_jobs(id) ON DELETE SET NULL');
   ensureColumnExists(db, 'swarm_jobs', 'tasks_assigned', 'INTEGER NOT NULL DEFAULT 0');
   ensureColumnExists(db, 'swarm_jobs', 'tasks_completed', 'INTEGER NOT NULL DEFAULT 0');
   ensureColumnExists(db, 'swarm_jobs', 'tasks_failed', 'INTEGER NOT NULL DEFAULT 0');
@@ -255,9 +259,61 @@ function runMigrations(db: Database.Database) {
 
   db.exec(`
     CREATE INDEX IF NOT EXISTS idx_swarm_jobs_global_job ON swarm_jobs(global_job_id);
+    CREATE INDEX IF NOT EXISTS idx_swarm_jobs_global_role ON swarm_jobs(global_role_id);
     CREATE INDEX IF NOT EXISTS idx_agents_job ON agents(job_id);
+    CREATE INDEX IF NOT EXISTS idx_agents_role ON agents(role_id);
     CREATE INDEX IF NOT EXISTS idx_tasks_required_job ON tasks(required_job);
+    CREATE INDEX IF NOT EXISTS idx_tasks_required_role ON tasks(required_role);
     CREATE INDEX IF NOT EXISTS idx_trajectories_job ON trajectories(job_id);
+    CREATE INDEX IF NOT EXISTS idx_trajectories_role ON trajectories(role_id);
+
+    CREATE VIEW IF NOT EXISTS global_roles AS
+      SELECT
+        id,
+        title,
+        description,
+        required_capabilities,
+        mcp_servers,
+        provider,
+        model,
+        system_prompt,
+        failure_patterns,
+        created_at,
+        updated_at
+      FROM global_jobs;
+
+    CREATE VIEW IF NOT EXISTS swarm_roles AS
+      SELECT
+        id,
+        swarm_id,
+        global_job_id AS global_role_id,
+        title,
+        description,
+        required_capabilities,
+        mcp_servers,
+        provider,
+        model,
+        system_prompt,
+        tasks_assigned,
+        tasks_completed,
+        tasks_failed,
+        created_at,
+        updated_at
+      FROM swarm_jobs;
+  `);
+
+  db.exec(`
+    UPDATE tasks SET required_role = required_job WHERE required_role IS NULL AND required_job IS NOT NULL;
+    UPDATE tasks SET required_job = required_role WHERE required_job IS NULL AND required_role IS NOT NULL;
+
+    UPDATE agents SET role_id = job_id WHERE role_id IS NULL AND job_id IS NOT NULL;
+    UPDATE agents SET job_id = role_id WHERE job_id IS NULL AND role_id IS NOT NULL;
+
+    UPDATE trajectories SET role_id = job_id WHERE role_id IS NULL AND job_id IS NOT NULL;
+    UPDATE trajectories SET job_id = role_id WHERE job_id IS NULL AND role_id IS NOT NULL;
+
+    UPDATE swarm_jobs SET global_role_id = global_job_id WHERE global_role_id IS NULL AND global_job_id IS NOT NULL;
+    UPDATE swarm_jobs SET global_job_id = global_role_id WHERE global_job_id IS NULL AND global_role_id IS NOT NULL;
   `);
 
   migrateTasksTable(db);

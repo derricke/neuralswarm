@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { fetchJson } from '@/lib/api';
 
 type SubmitState = 'idle' | 'loading' | 'success' | 'error';
@@ -21,13 +21,82 @@ type SwarmOption = {
   name: string;
 };
 
+const UUID_PATTERN =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+function resolveSwarmId(input: string, swarms: SwarmOption[]): string | null {
+  const normalized = input.trim();
+  if (!normalized) {
+    return null;
+  }
+
+  const byId = swarms.find((swarm) => swarm.id === normalized);
+  if (byId) {
+    return byId.id;
+  }
+
+  const byName = swarms.filter((swarm) => swarm.name.toLowerCase() === normalized.toLowerCase());
+  if (byName.length === 1) {
+    return byName[0].id;
+  }
+
+  return UUID_PATTERN.test(normalized) ? normalized : null;
+}
+
 export default function TaskUploadPage() {
-  const [swarmId, setSwarmId] = useState('');
+  const [swarmInput, setSwarmInput] = useState('');
+  const [selectedSwarmId, setSelectedSwarmId] = useState<string | null>(null);
+  const [swarmMenuOpen, setSwarmMenuOpen] = useState(false);
   const [swarms, setSwarms] = useState<SwarmOption[]>([]);
+  const swarmPickerRef = useRef<HTMLDivElement | null>(null);
+  const swarmSearchInputRef = useRef<HTMLInputElement | null>(null);
   const [requiredJob, setRequiredJob] = useState('');
   const [input, setInput] = useState('');
   const [state, setState] = useState<SubmitState>('idle');
   const [message, setMessage] = useState('');
+
+  const activeSwarmId = useMemo(() => {
+    if (selectedSwarmId) {
+      return selectedSwarmId;
+    }
+
+    return resolveSwarmId(swarmInput, swarms);
+  }, [selectedSwarmId, swarmInput, swarms]);
+  const activeSwarmIdValue = activeSwarmId ?? '';
+  const canAct = useMemo(() => activeSwarmId !== null, [activeSwarmId]);
+  const filteredSwarms = useMemo(() => {
+    const query = swarmInput.trim().toLowerCase();
+    if (!query) {
+      return swarms;
+    }
+
+    return swarms.filter(
+      (swarm) => swarm.name.toLowerCase().includes(query) || swarm.id.toLowerCase().includes(query)
+    );
+  }, [swarmInput, swarms]);
+
+  useEffect(() => {
+    function onPointerDown(event: MouseEvent) {
+      if (!swarmPickerRef.current) {
+        return;
+      }
+
+      if (event.target instanceof Node && !swarmPickerRef.current.contains(event.target)) {
+        setSwarmMenuOpen(false);
+      }
+    }
+
+    document.addEventListener('mousedown', onPointerDown);
+    return () => document.removeEventListener('mousedown', onPointerDown);
+  }, []);
+
+  useEffect(() => {
+    if (!swarmMenuOpen) {
+      return;
+    }
+
+    swarmSearchInputRef.current?.focus();
+  }, [swarmMenuOpen]);
 
   useEffect(() => {
     let mounted = true;
@@ -52,7 +121,7 @@ export default function TaskUploadPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!swarmId.trim() || !input.trim()) {
+    if (!activeSwarmId || !input.trim()) {
       setMessage('Swarm ID and task input are required');
       setState('error');
       return;
@@ -65,7 +134,7 @@ export default function TaskUploadPage() {
       const result = await fetchJson<UploadResponse>('/ui/upload', {
         method: 'POST',
         body: JSON.stringify({
-          swarm_id: swarmId,
+          swarm_id: activeSwarmId,
           input,
           required_job: requiredJob.trim() || undefined,
         }),
@@ -100,7 +169,7 @@ export default function TaskUploadPage() {
           </div>
         </section>
 
-        <article className="formCard">
+        <article className={`formCard${swarmMenuOpen ? ' formCardRaised' : ''}`}>
           <div className="sectionHeader">
             <h2>New task batch</h2>
             <span className="tag">form</span>
@@ -109,26 +178,107 @@ export default function TaskUploadPage() {
           <form onSubmit={handleSubmit} className="stack">
             <div className="field">
               <label htmlFor="swarmId">Swarm ID *</label>
-              <input
-                id="swarmId"
-                type="text"
-                list="swarm-options"
-                placeholder="Search by swarm name or paste UUID"
-                value={swarmId}
-                onChange={(e) => setSwarmId(e.target.value)}
-                disabled={state === 'loading'}
-              />
-              <datalist id="swarm-options">
-                {swarms.map((swarm) => (
-                  <option key={swarm.id} value={swarm.id}>
-                    {swarm.name}
-                  </option>
-                ))}
-              </datalist>
+              <div
+                className={`swarmPicker ui search selection dropdown${swarmMenuOpen ? ' active visible' : ''}`}
+                ref={swarmPickerRef}
+              >
+                <select
+                  aria-hidden="true"
+                  tabIndex={-1}
+                  value={activeSwarmIdValue}
+                  onChange={(e) => {
+                    const value = e.target.value;
+                    const selected = swarms.find((swarm) => swarm.id === value);
+                    setSelectedSwarmId(value || null);
+                    setSwarmInput(selected?.name ?? '');
+                    setSwarmMenuOpen(false);
+                  }}
+                >
+                  <option value="">Select swarm</option>
+                  {swarms.map((swarm) => (
+                    <option key={swarm.id} value={swarm.id}>
+                      {swarm.name}
+                    </option>
+                  ))}
+                </select>
+                <i className="dropdown icon" aria-hidden="true">v</i>
+                <input
+                  id="swarmId"
+                  ref={swarmSearchInputRef}
+                  className="search"
+                  value={swarmInput}
+                  onClick={() => {
+                    if (state !== 'loading') setSwarmMenuOpen(true);
+                  }}
+                  onFocus={() => {
+                    if (state !== 'loading') setSwarmMenuOpen(true);
+                  }}
+                  onChange={(e) => {
+                    setSwarmInput(e.target.value);
+                    setSelectedSwarmId(null);
+                    setSwarmMenuOpen(true);
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Escape') {
+                      setSwarmMenuOpen(false);
+                      return;
+                    }
+
+                    if (e.key !== 'Enter') {
+                      return;
+                    }
+
+                    const resolved = resolveSwarmId(swarmInput, swarms);
+                    if (resolved) {
+                      const selected = swarms.find((swarm) => swarm.id === resolved);
+                      setSelectedSwarmId(resolved);
+                      setSwarmInput(selected?.name ?? swarmInput);
+                      setSwarmMenuOpen(false);
+                      return;
+                    }
+
+                    if (filteredSwarms.length === 1) {
+                      setSelectedSwarmId(filteredSwarms[0].id);
+                      setSwarmInput(filteredSwarms[0].name);
+                      setSwarmMenuOpen(false);
+                    }
+                  }}
+                  placeholder="Search by swarm name or paste UUID"
+                  disabled={state === 'loading'}
+                  autoComplete="off"
+                />
+                {swarmMenuOpen ? (
+                  <div className="menu transition visible" role="listbox" aria-label="Swarm options">
+                    {filteredSwarms.length > 0 ? (
+                      filteredSwarms.map((swarm) => {
+                        const selected = swarm.id === selectedSwarmId;
+                        return (
+                          <div
+                            key={swarm.id}
+                            className={`item${selected ? ' active selected' : ''}`}
+                            data-value={swarm.id}
+                            onClick={() => {
+                              setSelectedSwarmId(swarm.id);
+                              setSwarmInput(swarm.name);
+                              setSwarmMenuOpen(false);
+                            }}
+                          >
+                            <div className="swarmItemName">{swarm.name}</div>
+                            <div className="swarmItemMeta">Value: {swarm.id}</div>
+                            <div className="swarmItemMeta">UUID: {swarm.id}</div>
+                          </div>
+                        );
+                      })
+                    ) : (
+                      <div className="item empty">No swarms match your search.</div>
+                    )}
+                  </div>
+                ) : null}
+              </div>
             </div>
 
             <div className="field">
-              <label htmlFor="requiredJob">Assign to job (optional, title or id)</label>
+              <label htmlFor="requiredJob">Assign to role (optional, title or id)</label>
               <input
                 id="requiredJob"
                 type="text"
@@ -155,7 +305,7 @@ export default function TaskUploadPage() {
               <button
                 type="submit"
                 className="button buttonPrimary"
-                disabled={state === 'loading' || !swarmId.trim() || !input.trim()}
+                disabled={state === 'loading' || !canAct || !input.trim()}
               >
                 {state === 'loading' ? 'Submitting…' : 'Submit tasks'}
               </button>

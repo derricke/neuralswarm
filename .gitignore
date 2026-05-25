@@ -20,6 +20,11 @@ web/node_modules/
 # Logs
 *.log
 logs/
+diagnostics-reports/
+
+# Local diagnostics tooling (intentionally not committed)
+scripts/capture-wsl-diagnostics.sh
+scripts/dev-winlog.sh
 
 # OS
 .DS_Store

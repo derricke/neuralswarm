@@ -1,5 +1,6 @@
 import { logger } from './logger';
 import { runCleanup } from '../memory/trajectoryStore';
+import { getLearningEngine } from '../learning/engine';
 
 let cleanupInterval: NodeJS.Timeout | null = null;
 
@@ -14,6 +15,9 @@ export function startScheduler() {
     try {
       logger.info('running scheduled cleanup');
       const result = runCleanup();
+      if (result.archived > 0 || result.deleted > 0) {
+        getLearningEngine().rebuildFromDatabase();
+      }
       logger.info({ archived: result.archived, deleted: result.deleted }, 'cleanup completed');
     } catch (err) {
       logger.error({ err }, 'cleanup failed');
@@ -25,6 +29,9 @@ export function startScheduler() {
     try {
       logger.info('running initial cleanup on startup');
       const result = runCleanup();
+      if (result.archived > 0 || result.deleted > 0) {
+        getLearningEngine().rebuildFromDatabase();
+      }
       logger.info({ archived: result.archived, deleted: result.deleted }, 'initial cleanup completed');
     } catch (err) {
       logger.error({ err }, 'initial cleanup failed');

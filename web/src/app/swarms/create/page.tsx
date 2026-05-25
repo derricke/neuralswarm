@@ -16,6 +16,7 @@ type SwarmResponse = {
 
 export default function SwarmCreatePage() {
   const [name, setName] = useState('');
+  const [workspaceDir, setWorkspaceDir] = useState('');
   const [state, setState] = useState<SubmitState>('idle');
   const [message, setMessage] = useState('');
   const [createdId, setCreatedId] = useState<string>('');
@@ -33,15 +34,20 @@ export default function SwarmCreatePage() {
     setMessage('');
 
     try {
+      const config = workspaceDir.trim()
+        ? { workspaceDir: workspaceDir.trim() }
+        : {};
+
       const result = await fetchJson<SwarmResponse>('/swarms', {
         method: 'POST',
-        body: JSON.stringify({ name, config: {} }),
+        body: JSON.stringify({ name, config }),
       });
 
       setCreatedId(result.id);
       setMessage(`✓ Swarm "${result.name}" created with ID: ${result.id}`);
       setState('success');
       setName('');
+      setWorkspaceDir('');
       setTimeout(() => {
         setState('idle');
         setMessage('');
@@ -87,6 +93,21 @@ export default function SwarmCreatePage() {
                 maxLength={100}
               />
               <div className="helper">{name.length}/100 characters</div>
+            </div>
+
+            <div className="field">
+              <label htmlFor="workspace-dir">Workspace directory (optional)</label>
+              <input
+                id="workspace-dir"
+                type="text"
+                placeholder="/home/you/projects/my-app"
+                value={workspaceDir}
+                onChange={(e) => setWorkspaceDir(e.target.value)}
+                disabled={state === 'loading'}
+              />
+              <div className="helper">
+                Filesystem MCP tools for this swarm will use this directory. Leave empty to use the default app workspace.
+              </div>
             </div>
 
             <div className="actions">

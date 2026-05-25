@@ -1,6 +1,7 @@
 import { initDb, getDb, resetDb } from '../lib/db';
-import { createJob } from '../jobs/jobManager';
+import { createRole } from '../roles/roleManager';
 import { spawnAgent } from '../agents/spawner';
+import { resolveDefaultProviderModel } from '../agents/providerConfig';
 import { config } from 'dotenv';
 config();
 
@@ -12,10 +13,11 @@ async function main() {
   db.prepare(`INSERT OR IGNORE INTO swarms (id, name) VALUES ('test-swarm', 'Test Swarm')`).run();
 
   // Create a job with MCP
-  const job = await createJob('test-swarm', {
+  const defaults = resolveDefaultProviderModel();
+  const job = await createRole('test-swarm', {
     title: 'MCP Tester',
-    provider: 'anthropic',
-    model: 'claude-3-5-sonnet-latest',
+    provider: defaults.provider,
+    model: defaults.model,
     system_prompt: 'You are an agent with access to the local filesystem. Read the package.json file and tell me the name of the project.',
     mcpServers: [
       {

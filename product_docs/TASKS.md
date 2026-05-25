@@ -6,7 +6,7 @@
 - [x] Add baseline docs (PRD, SPEC, ARCHITECTURE, etc.)
 - [x] Locked MVP decisions (coordinator as Node.js service, full HNSW learning, short-lived agents)
 - [ ] Set up TypeScript + Express boilerplate
-- [ ] Add .env.example + .gitignore (ANTHROPIC_API_KEY, OPENAI_API_KEY, GOOGLE_API_KEY)
+- [ ] Add .env.example + .gitignore (ANTHROPIC_API_KEY, OPENAI_API_KEY, GOOGLE_API_KEY, OPENAI_COMPATIBLE_API_KEY, OPENAI_COMPATIBLE_URL)
 - [ ] Skeleton API routes (GET /health, POST /swarms, GET /swarms/:id)
 
 ## Milestone 1: Core Orchestration
@@ -20,6 +20,7 @@
   - [ ] Support Claude (via Anthropic SDK)
   - [ ] Support GPT-4 (via OpenAI SDK)
   - [ ] Support Gemini (via Google SDK)
+  - [ ] Support OpenAI-compatible endpoints (for example OpenRouter)
   - [ ] Support Ollama (local fallback)
   - [ ] Provider detection / round-robin routing
   - [ ] Session lifecycle (spawn → execute → cleanup, no persistent state)
@@ -53,7 +54,7 @@
   - [ ] All data (tasks, trajectories, embeddings)tor retries failures
   - [ ] All data flows to SQLite
  (HNSW + embeddings from day 1)
-  - [ ] Vector embeddings for trajectories (OpenAI text-embedding-3-small)
+  - [ ] Vector embeddings for trajectories (provider-agnostic: Google/OpenAI/OpenAI-compatible/Ollama)
   - [ ] HNSW index build + search
   - [ ] Pattern replay: on task start, inject similar successful trajectories into prompt
   - [ ] Auto-learn from all runs (validation via explicit tagging in v2)
@@ -166,7 +167,7 @@
 - [ ] **Documentation**
   - [x] README: quickstart, architecture, example workflow
   - [ ] API documentation (OpenAPI/Swagger)
-  - [x] Environment variables guide (ANTHROPIC_API_KEY, OPENAI_API_KEY, etc.)
+  - [x] Environment variables guide (ANTHROPIC_API_KEY, OPENAI_API_KEY, GOOGLE_API_KEY, OPENAI_COMPATIBLE_API_KEY, OPENAI_COMPATIBLE_URL, etc.)
   - [ ] Docker setup instructions
 
 - [/] **Deployment**

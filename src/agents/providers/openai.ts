@@ -2,11 +2,37 @@ import OpenAI from 'openai';
 import type { AgentConfig, AgentResult } from '../types';
 import { McpManager, McpTool } from '../mcpClient';
 
+const DEFAULT_MAX_TOOL_TURNS = 12;
+
+function getMaxToolTurns(): number {
+  const raw = Number.parseInt(process.env.AGENT_MAX_TOOL_TURNS ?? `${DEFAULT_MAX_TOOL_TURNS}`, 10);
+  if (!Number.isFinite(raw) || raw <= 0) {
+    return DEFAULT_MAX_TOOL_TURNS;
+  }
+
+  return raw;
+}
+
 export async function runOpenAIAgent(
   task: string,
   config: AgentConfig
 ): Promise<AgentResult> {
-  const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+  const isCompatible = config.provider === 'openai_compatible';
+  const apiKey = isCompatible
+    ? process.env.OPENAI_COMPATIBLE_API_KEY?.trim()
+    : process.env.OPENAI_API_KEY?.trim();
+
+  if (!apiKey) {
+    const envName = isCompatible ? 'OPENAI_COMPATIBLE_API_KEY' : 'OPENAI_API_KEY';
+    throw new Error(`${envName} is required when using provider=${config.provider}`);
+  }
+
+  const baseURL = isCompatible ? process.env.OPENAI_COMPATIBLE_URL?.trim() : undefined;
+  if (isCompatible && !baseURL) {
+    throw new Error('OPENAI_COMPATIBLE_URL is required when using provider=openai_compatible');
+  }
+
+  const client = new OpenAI({ apiKey, baseURL });
   const start = Date.now();
 
   let mcpManager: McpManager | undefined;
@@ -24,6 +50,8 @@ export async function runOpenAIAgent(
   let finalOutput = '';
   let totalInputTokens = 0;
   let totalOutputTokens = 0;
+  const maxToolTurns = getMaxToolTurns();
+  let turn = 0;
 
   try {
     if (config.mcpServers && config.mcpServers.length > 0) {
@@ -46,7 +74,8 @@ export async function runOpenAIAgent(
         });
       }
     }
-    while (true) {
+    while (turn < maxToolTurns) {
+      turn++;
       const stream = await client.chat.completions.create({
         model: config.model,
         max_tokens: config.maxTokens ?? 1024,
@@ -131,6 +160,10 @@ export async function runOpenAIAgent(
         });
       }
     }
+
+    if (turn >= maxToolTurns) {
+      throw new Error(`tool_loop_limit_exceeded: exceeded ${maxToolTurns} turns`);
+    }
   } catch (error) {
     if (mcpManager) await mcpManager.disconnectAll();
     throw new Error(`OpenAI API Error: ${error instanceof Error ? error.message : String(error)}`);
@@ -141,7 +174,7 @@ export async function runOpenAIAgent(
   }
 
   return {
-    provider: 'openai',
+    provider: config.provider,
     model: config.model,
     output: finalOutput,
     inputTokens: totalInputTokens,

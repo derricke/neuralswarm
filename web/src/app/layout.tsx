@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import { Space_Grotesk, IBM_Plex_Mono } from 'next/font/google';
+import { TopNav } from '@/components/topNav';
 import './globals.css';
 
 const spaceGrotesk = Space_Grotesk({ subsets: ['latin'], variable: '--font-display' });
@@ -14,6 +15,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
   return (
     <html lang="en">
       <body className={`${spaceGrotesk.variable} ${plexMono.variable}`}>
+        <TopNav />
         {children}
       </body>
     </html>
