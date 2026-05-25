@@ -18,6 +18,8 @@ type HnswIndex = {
   addPoint(point: number[], label: number): void;
   searchKnn(point: number[], k: number): { neighbors: number[]; distances: number[] };
   getCurrentCount(): number;
+  writeIndex(path: string): void;
+  readIndex(path: string, maxElements: number, allowReplaceDeleted: boolean): void;
 };
 
 const DEFAULT_DIMENSION = 1536;
@@ -30,6 +32,7 @@ type ProbeStatus = 'not_run' | 'passed' | 'skipped' | 'failed' | 'disabled';
 
 class LearningEngine {
   private index: HnswIndex | null = null;
+  private hnswlibModule: any = null;
   private labelToTrajectoryId = new Map<number, string>();
   private trajectoryIdToLabel = new Map<string, number>();
   private nextLabel = 0;
@@ -49,7 +52,7 @@ class LearningEngine {
     this.isDimensionPinned = dimension !== DEFAULT_DIMENSION;
   }
 
-  rebuildFromDatabase(): void {
+  async rebuildFromDatabase(): Promise<void> {
     const rows = getDb()
       .prepare(
         `SELECT id, swarm_id, provider, model, description, result, success, embedding
@@ -59,7 +62,7 @@ class LearningEngine {
       .all() as TrajectoryEmbeddingRow[];
 
     try {
-      this.index = this.createIndex(Math.max(this.maxElements, rows.length + 1));
+      this.index = await this.createIndex(Math.max(this.maxElements, rows.length + 1));
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
       this.index = null;
@@ -118,7 +121,7 @@ class LearningEngine {
     if (this.initialized) return;
 
     await this.runStartupDimensionProbe();
-    this.rebuildFromDatabase();
+    await this.rebuildFromDatabase();
   }
 
   getRuntimeStatus(): {
@@ -383,19 +386,47 @@ class LearningEngine {
     return matches.sort((a, b) => b.score - a.score).slice(0, limit);
   }
 
-  private createIndex(maxElements: number): HnswIndex {
+  private async createIndex(maxElements: number): Promise<HnswIndex> {
     if (process.env.LEARNING_DISABLE_HNSW === '1') {
       throw new Error('hnsw_disabled');
     }
 
-    // Lazy require keeps native addon out of startup path unless indexing is explicitly enabled.
-    const { HierarchicalNSW } = require('hnswlib-node') as {
-      HierarchicalNSW: new (space: string, dim: number) => unknown;
-    };
+    if (!this.hnswlibModule) {
+      const { loadHnswlib } = await import('hnswlib-wasm');
+      this.hnswlibModule = await loadHnswlib();
+    }
 
-    const index = new HierarchicalNSW('l2', this.dimension) as unknown as HnswIndex;
+    const index = new this.hnswlibModule.HierarchicalNSW('l2', this.dimension) as unknown as HnswIndex;
     index.initIndex(maxElements);
     return index;
+  }
+
+  async saveIndex(physicalPath: string): Promise<void> {
+    if (!this.index || !this.hnswlibModule) throw new Error('Index not initialized');
+
+    const virtualPath = 'temp_virtual.dat';
+    this.index.writeIndex(virtualPath);
+    const buffer = this.hnswlibModule.EmscriptenFileSystemManager.readFile(virtualPath);
+    const fs = await import('fs/promises');
+    await fs.writeFile(physicalPath, buffer);
+  }
+
+  async loadIndex(physicalPath: string, maxElements: number = this.maxElements): Promise<void> {
+    if (!this.hnswlibModule) {
+      const { loadHnswlib } = await import('hnswlib-wasm');
+      this.hnswlibModule = await loadHnswlib();
+    }
+
+    const virtualPath = 'temp_virtual.dat';
+    const fs = await import('fs/promises');
+    const buffer = await fs.readFile(physicalPath);
+    this.hnswlibModule.EmscriptenFileSystemManager.writeFile(virtualPath, buffer);
+
+    const index = new this.hnswlibModule.HierarchicalNSW('l2', this.dimension) as unknown as HnswIndex;
+    index.readIndex(virtualPath, maxElements, false);
+
+    this.index = index;
+    this.initialized = true;
   }
 
   private addToIndex(trajectoryId: string, embedding: number[]): void {
