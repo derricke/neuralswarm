@@ -72,4 +72,45 @@ describe('dispatcher', () => {
     expect(subtasks.every((s) => s.parent_id === taskId)).toBe(true);
     expect(subtasks.every((s) => s.status === 'pending')).toBe(true);
   });
+
+  it('auto-hires an agent when dispatcher chooses hire', async () => {
+    const swarmId = insertSwarm();
+    const taskId = insertTask(swarmId, 'Create a Next.js app with TypeScript and Tailwind');
+
+    (spawnAgent as jest.Mock).mockResolvedValue({
+      provider: 'google',
+      model: 'gemini-2.5-flash',
+      output: JSON.stringify({
+        action: 'hire',
+        new_job_title: 'Next.js Project Creator',
+        description: 'Build and scaffold production-grade Next.js apps',
+        system_prompt: 'You are an expert Next.js project setup engineer.',
+      }),
+      inputTokens: 10,
+      outputTokens: 20,
+      durationMs: 100,
+    });
+
+    const result = await dispatchTask(taskId);
+    expect(result.action).toBe('route');
+
+    const db = getDb();
+    const task = db.prepare('SELECT required_job FROM tasks WHERE id = ?').get(taskId) as {
+      required_job: string | null;
+    };
+    expect(task.required_job).toBeTruthy();
+
+    const job = db
+      .prepare('SELECT id, title FROM swarm_jobs WHERE id = ?')
+      .get(task.required_job) as { id: string; title: string } | undefined;
+    expect(job?.title).toBe('Next.js Project Creator');
+
+    const agents = db
+      .prepare('SELECT id, provider, model FROM agents WHERE swarm_id = ? AND job_id = ?')
+      .all(swarmId, task.required_job) as Array<{ id: string; provider: string; model: string }>;
+
+    expect(agents.length).toBeGreaterThan(0);
+    expect(agents[0]?.provider).toBe('google');
+    expect(agents[0]?.model).toBe('gemini-2.5-flash');
+  });
 });

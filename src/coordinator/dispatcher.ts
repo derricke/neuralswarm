@@ -116,6 +116,22 @@ Return ONLY the raw JSON object. Do not wrap in markdown tags like \`\`\`json.`;
         model: config.model,
         system_prompt: decision.system_prompt
       });
+
+      const hiredAgentId = randomUUID();
+      db.prepare(
+        `INSERT INTO agents (id, swarm_id, provider, model, job_id) VALUES (?, ?, ?, ?, ?)`
+      ).run(hiredAgentId, task.swarm_id, newJob.provider, newJob.model, newJob.id);
+
+      logger.info(
+        {
+          taskId,
+          roleId: newJob.id,
+          agentId: hiredAgentId,
+          provider: newJob.provider,
+          model: newJob.model,
+        },
+        'dispatcher auto-hired agent for new role'
+      );
       
       db.prepare('UPDATE tasks SET required_job = ?, updated_at = unixepoch() WHERE id = ?').run(newJob.id, taskId);
       return { action: 'route', jobId: newJob.id };
