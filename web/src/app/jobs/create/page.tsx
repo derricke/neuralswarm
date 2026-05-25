@@ -24,6 +24,7 @@ export default function CreateJobPage() {
   const [provider, setProvider] = useState('');
   const [model, setModel] = useState('');
   const [systemPrompt, setSystemPrompt] = useState('You are a coding specialist.');
+  const [mcpServersJson, setMcpServersJson] = useState('[\n  \n]');
 
   const [jobs, setJobs] = useState<GlobalJob[]>([]);
   const [state, setState] = useState<SubmitState>('idle');
@@ -52,6 +53,20 @@ export default function CreateJobPage() {
     setState('loading');
     setMessage('');
 
+    let mcpServers: any[] = [];
+    if (mcpServersJson.trim() && mcpServersJson.trim() !== '[\n  \n]') {
+      try {
+        mcpServers = JSON.parse(mcpServersJson);
+        if (!Array.isArray(mcpServers)) {
+          throw new Error('MCP servers must be a JSON array');
+        }
+      } catch (err) {
+        setMessage('Invalid MCP Servers JSON: ' + (err instanceof Error ? err.message : String(err)));
+        setState('error');
+        return;
+      }
+    }
+
     const payload = {
       title: title.trim(),
       description: description.trim(),
@@ -59,6 +74,7 @@ export default function CreateJobPage() {
       model: model.trim() || undefined,
       system_prompt: systemPrompt.trim(),
       recommendation_swarm_id: returnSwarmId || undefined,
+      mcp_servers: mcpServers,
     };
 
     try {
@@ -71,6 +87,7 @@ export default function CreateJobPage() {
       setJobs(result.jobs);
       setMessage(`Saved global role "${payload.title}"`);
       setState('success');
+      setMcpServersJson('[\n  \n]');
     } catch (err) {
       setMessage(err instanceof Error ? err.message : 'Failed to save global role');
       setState('error');
@@ -127,6 +144,18 @@ export default function CreateJobPage() {
             <div className="field">
               <label htmlFor="job-prompt">System prompt</label>
               <textarea id="job-prompt" value={systemPrompt} onChange={(e) => setSystemPrompt(e.target.value)} disabled={state === 'loading'} />
+            </div>
+            <div className="field">
+              <label htmlFor="job-mcp">MCP Servers (JSON)</label>
+              <textarea
+                id="job-mcp"
+                value={mcpServersJson}
+                onChange={(e) => setMcpServersJson(e.target.value)}
+                placeholder={'[\n  {\n    "name": "filesystem",\n    "command": "npx",\n    "args": ["-y", "@modelcontextprotocol/server-filesystem", "./"]\n  }\n]'}
+                disabled={state === 'loading'}
+                style={{ fontFamily: 'monospace', minHeight: '120px' }}
+              />
+              <div className="helper">Optional JSON array of MCP servers for this role.</div>
             </div>
             <div className="actions">
               <button type="submit" className="button buttonPrimary" disabled={state === 'loading' || !canSave}>Save global role</button>

@@ -36,6 +36,7 @@ router.post(['/jobs', '/roles'], async (req: Request, res: Response) => {
       model,
       system_prompt,
       recommendation_swarm_id,
+      mcp_servers,
     } = req.body;
 
     if (!title || !system_prompt) {
@@ -52,6 +53,7 @@ router.post(['/jobs', '/roles'], async (req: Request, res: Response) => {
       model,
       system_prompt,
       recommendation_swarm_id,
+      mcpServers: mcp_servers,
     });
 
     res.status(201).json(job);
@@ -113,6 +115,7 @@ router.post(['/swarms/:swarmId/jobs', '/swarms/:swarmId/roles'], async (req: Req
       provider,
       model,
       system_prompt,
+      mcp_servers,
     } = req.body;
     const globalId = String(global_role_id ?? global_job_id ?? '');
 
@@ -136,6 +139,7 @@ router.post(['/swarms/:swarmId/jobs', '/swarms/:swarmId/roles'], async (req: Req
       model,
       system_prompt,
       recommendation_swarm_id: swarmId,
+      mcpServers: mcp_servers,
     });
 
     res.status(201).json(job);

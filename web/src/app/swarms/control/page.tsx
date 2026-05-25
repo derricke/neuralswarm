@@ -44,6 +44,8 @@ type TaskRow = {
   description: string;
   status: string;
   created_at: string | number;
+  result?: string;
+  error?: string;
 };
 
 const UUID_PATTERN =
@@ -637,6 +639,16 @@ export default function SwarmControlPage() {
                         <div className="listSub" style={{ fontSize: '0.8rem', opacity: 0.7 }}>
                           Created: {formatDate(task.created_at)}
                         </div>
+                        {task.result && (
+                           <div style={{ marginTop: '0.5rem', padding: '0.75rem', background: 'var(--bg-subtle, #f3f4f6)', borderRadius: '4px', fontSize: '0.85rem', whiteSpace: 'pre-wrap', fontFamily: 'monospace', maxHeight: '200px', overflowY: 'auto' }}>
+                             {task.result}
+                           </div>
+                        )}
+                        {task.error && (
+                           <div style={{ marginTop: '0.5rem', padding: '0.75rem', background: 'var(--status-failed-bg, #fee2e2)', color: 'var(--status-failed, #dc2626)', borderRadius: '4px', fontSize: '0.85rem', whiteSpace: 'pre-wrap', fontFamily: 'monospace' }}>
+                             {task.error}
+                           </div>
+                        )}
                       </td>
                       <td>
                         <span className={statusClass(task.status)}>{task.status}</span>
