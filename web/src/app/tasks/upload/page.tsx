@@ -278,7 +278,7 @@ export default function TaskUploadPage() {
             </div>
 
             <div className="field">
-              <label htmlFor="requiredJob">Assign to job (optional, title or id)</label>
+              <label htmlFor="requiredJob">Assign to role (optional, title or id)</label>
               <input
                 id="requiredJob"
                 type="text"

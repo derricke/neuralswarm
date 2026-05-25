@@ -6,7 +6,7 @@ import { logger } from '../lib/logger';
 import { logTrajectory } from '../memory/trajectoryStore';
 import { getLearningEngine } from '../learning/engine';
 import { getOrCreateAgentTypeProfile, updateAgentTypeProfileAfterTask } from '../agents/typeProfile';
-import { updateGlobalJobFailurePatterns } from '../jobs/jobManager';
+import { updateGlobalRoleFailurePatterns } from '../roles/roleManager';
 import { dispatchTask } from './dispatcher';
 import { trajectoryEmitter } from './emitter';
 import type { AgentConfig, AgentProvider } from '../agents/types';
@@ -278,7 +278,13 @@ export async function runTask(taskId: string): Promise<void> {
 
       const config: AgentConfig = {
         provider: agent.provider,
-        model: (attempt === 0 && task.complexity === 'low') ? getCheapModel(agent.provider) : agent.model,
+        model: selectExecutionModel({
+          provider: agent.provider,
+          currentModel: agent.model,
+          complexity: task.complexity,
+          attempt,
+          recommendation,
+        }),
         systemPrompt,
         temperature: typeProfile.temperature,
         maxTokens: typeProfile.top_k_tokens,
@@ -351,7 +357,7 @@ export async function runTask(taskId: string): Promise<void> {
           const isSystemError = ['rate_limit', 'timeout', 'auth_error', 'provider_error'].includes(errorType);
           if (!isSystemError) {
             const actualError = err instanceof Error ? err.message : String(err);
-            updateGlobalJobFailurePatterns(job.global_job_id, task.description, actualError).catch(e => {
+            updateGlobalRoleFailurePatterns(job.global_job_id, task.description, actualError).catch(e => {
               logger.warn({ error: e }, 'failed to update job failure patterns');
             });
           }
@@ -563,12 +569,60 @@ function getSuccessRate(agent: AgentRow): number {
 }
 
 function getCheapModel(provider: AgentProvider): string {
+  const override = getTierModelOverride('CHEAP', provider);
+  if (override) return override;
+
   switch (provider) {
     case 'openai': return 'gpt-4o-mini';
     case 'anthropic': return 'claude-3-5-haiku-latest';
     case 'google': return 'gemini-2.5-flash';
     case 'ollama': return 'llama3';
   }
+}
+
+function getAdvancedModel(provider: AgentProvider): string {
+  const override = getTierModelOverride('ADVANCED', provider);
+  if (override) return override;
+
+  switch (provider) {
+    case 'openai': return 'gpt-4o';
+    case 'anthropic': return 'claude-3-5-sonnet-latest';
+    case 'google': return 'gemini-2.5-pro';
+    case 'ollama': return 'llama3';
+  }
+}
+
+function getTierModelOverride(tier: 'CHEAP' | 'ADVANCED', provider: AgentProvider): string | null {
+  const key = `NEURALSWARM_${tier}_MODEL_${provider.toUpperCase()}`;
+  const value = process.env[key]?.trim();
+  return value && value.length > 0 ? value : null;
+}
+
+function selectExecutionModel(input: {
+  provider: AgentProvider;
+  currentModel: string;
+  complexity: 'high' | 'low';
+  attempt: number;
+  recommendation: { provider: AgentProvider; model: string } | null;
+}): string {
+  const { provider, currentModel, complexity, attempt, recommendation } = input;
+
+  // If learning recommends a model for this provider, prefer it.
+  if (recommendation?.provider === provider && recommendation.model.trim().length > 0) {
+    return recommendation.model;
+  }
+
+  // Low complexity starts on cheap model for cost efficiency.
+  if (attempt === 0 && complexity === 'low') {
+    return getCheapModel(provider);
+  }
+
+  // High complexity or retries should run on stronger models.
+  if (complexity === 'high' || attempt > 0) {
+    return getAdvancedModel(provider);
+  }
+
+  return currentModel || getAdvancedModel(provider);
 }
 
 function getJobById(jobId: string, swarmId: string): JobRow | null {
@@ -623,30 +677,32 @@ async function hireAgentsForSwarm(
     )
     .all(swarmId) as JobRow[];
 
-  const skippedUnavailableProviders = new Set<AgentProvider>();
-
   if (jobs.length > 0) {
     for (const job of jobs) {
-      if (!isProviderAvailable(job.provider)) {
-        skippedUnavailableProviders.add(job.provider);
+      const existingForJob = db
+        .prepare(`SELECT * FROM agents WHERE swarm_id = ? AND job_id = ?`)
+        .all(swarmId, job.id) as AgentRow[];
+
+      const hasRunnableAgentForJob = existingForJob.some(
+        (agent) => isProviderAvailable(agent.provider) && !isFired(agent)
+      );
+      if (hasRunnableAgentForJob) {
         continue;
       }
 
-      const existing = db
-        .prepare(`SELECT id FROM agents WHERE swarm_id = ? AND job_id = ? LIMIT 1`)
-        .get(swarmId, job.id) as { id: string } | undefined;
+      const defaults = getDefaultAgentConfig();
+      const provider = isProviderAvailable(job.provider) ? job.provider : defaults.provider;
+      const model = isProviderAvailable(job.provider) ? job.model : defaults.model;
 
-      if (!existing) {
-        registerAgent(swarmId, job.provider, job.model, job.id);
-        hired++;
+      if (!isProviderAvailable(job.provider)) {
+        logger.info(
+          { swarmId, jobId: job.id, configuredProvider: job.provider, fallbackProvider: provider, fallbackModel: model },
+          'job provider unavailable; hiring fallback agent for job'
+        );
       }
-    }
 
-    if (skippedUnavailableProviders.size > 0) {
-      logger.info(
-        { swarmId, providers: Array.from(skippedUnavailableProviders) },
-        'skipped jobs with providers that are not configured in environment'
-      );
+      registerAgent(swarmId, provider, model, job.id);
+      hired++;
     }
   }
 

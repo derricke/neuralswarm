@@ -2,7 +2,7 @@ import { randomUUID } from 'crypto';
 import { getDb } from '../lib/db';
 import { logger } from '../lib/logger';
 import { spawnAgent } from '../agents/spawner';
-import { createJob } from '../jobs/jobManager';
+import { createRole } from '../roles/roleManager';
 import type { AgentConfig, AgentProvider } from '../agents/types';
 
 export type DispatchResult =
@@ -130,7 +130,7 @@ Return ONLY the raw JSON object. Do not wrap in markdown tags like \`\`\`json.`;
     }
     
     if (decision.action === 'hire' && decision.new_job_title && decision.system_prompt) {
-      const newJob = await createJob(task.swarm_id, {
+      const newJob = await createRole(task.swarm_id, {
         title: decision.new_job_title,
         description: decision.description || decision.new_job_title,
         provider: config.provider,

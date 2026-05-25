@@ -1,5 +1,5 @@
 import { Router, Request, Response } from 'express';
-import * as jobManager from '../jobs/jobManager';
+import * as roleManager from '../roles/roleManager';
 import { registerAgent } from '../coordinator';
 import { getDb } from '../lib/db';
 import { logger } from '../lib/logger';
@@ -15,9 +15,9 @@ function isAgentProvider(value: unknown): value is AgentProvider {
  * GET /jobs
  * List all global jobs
  */
-router.get('/jobs', async (_req: Request, res: Response) => {
+router.get(['/jobs', '/roles'], async (_req: Request, res: Response) => {
   try {
-    const jobs = jobManager.listGlobalJobs();
+    const jobs = roleManager.listGlobalRoles();
     res.json({ jobs });
   } catch (err) {
     logger.error({ error: err }, 'GET /jobs failed');
@@ -29,23 +29,32 @@ router.get('/jobs', async (_req: Request, res: Response) => {
  * POST /jobs
  * Create a global job
  */
-router.post('/jobs', async (req: Request, res: Response) => {
+router.post(['/jobs', '/roles'], async (req: Request, res: Response) => {
   try {
-    const { title, description, required_capabilities, provider, model, system_prompt } = req.body;
-
-    if (!title || !provider || !model || !system_prompt) {
-      return res.status(400).json({
-        error: 'Missing required fields: title, provider, model, system_prompt',
-      });
-    }
-
-    const job = await jobManager.createGlobalJob({
+    const {
       title,
       description,
       required_capabilities,
       provider,
       model,
       system_prompt,
+      recommendation_swarm_id,
+    } = req.body;
+
+    if (!title || !system_prompt) {
+      return res.status(400).json({
+        error: 'Missing required fields: title, system_prompt',
+      });
+    }
+
+    const job = await roleManager.createGlobalRole({
+      title,
+      description,
+      required_capabilities,
+      provider,
+      model,
+      system_prompt,
+      recommendation_swarm_id,
     });
 
     res.status(201).json(job);
@@ -62,13 +71,13 @@ router.post('/jobs', async (req: Request, res: Response) => {
 router.post('/swarms/:swarmId/agents', async (req: Request, res: Response) => {
   try {
     const swarmId = String(req.params.swarmId);
-    const jobId = String(req.body.job_id ?? '');
+    const jobId = String(req.body.role_id ?? req.body.job_id ?? '');
 
     if (!jobId) {
       return res.status(400).json({ error: 'Missing required field: job_id' });
     }
 
-    const job = jobManager.getJobById(jobId);
+    const job = roleManager.getRoleById(jobId);
     if (!job || job.swarm_id !== swarmId) {
       return res.status(404).json({ error: 'Job not found' });
     }
@@ -95,30 +104,41 @@ router.post('/swarms/:swarmId/agents', async (req: Request, res: Response) => {
  * POST /swarms/:id/jobs
  * Assign a global job to a swarm, or create+assign when global_job_id is omitted
  */
-router.post('/swarms/:swarmId/jobs', async (req: Request, res: Response) => {
+router.post(['/swarms/:swarmId/jobs', '/swarms/:swarmId/roles'], async (req: Request, res: Response) => {
   try {
     const swarmId = String(req.params.swarmId);
-    const { global_job_id, title, description, required_capabilities, provider, model, system_prompt } = req.body;
-
-    if (global_job_id) {
-      const job = await jobManager.assignGlobalJobToSwarm(swarmId, String(global_job_id));
-      res.status(201).json(job);
-      return;
-    }
-
-    if (!title || !provider || !model || !system_prompt) {
-      return res.status(400).json({
-        error: 'Missing required fields: global_job_id or title, provider, model, system_prompt',
-      });
-    }
-
-    const job = await jobManager.createJob(swarmId, {
+    const {
+      global_role_id,
+      global_job_id,
       title,
       description,
       required_capabilities,
       provider,
       model,
       system_prompt,
+    } = req.body;
+    const globalId = String(global_role_id ?? global_job_id ?? '');
+
+    if (globalId) {
+      const job = await roleManager.assignGlobalRoleToSwarm(swarmId, globalId);
+      res.status(201).json(job);
+      return;
+    }
+
+    if (!title || !system_prompt) {
+      return res.status(400).json({
+        error: 'Missing required fields: global_job_id or title, system_prompt',
+      });
+    }
+
+    const job = await roleManager.createRole(swarmId, {
+      title,
+      description,
+      required_capabilities,
+      provider,
+      model,
+      system_prompt,
+      recommendation_swarm_id: swarmId,
     });
 
     res.status(201).json(job);
@@ -132,10 +152,10 @@ router.post('/swarms/:swarmId/jobs', async (req: Request, res: Response) => {
  * GET /swarms/:id/jobs
  * List all jobs in a swarm
  */
-router.get('/swarms/:swarmId/jobs', async (req: Request, res: Response) => {
+router.get(['/swarms/:swarmId/jobs', '/swarms/:swarmId/roles'], async (req: Request, res: Response) => {
   try {
     const swarmId = String(req.params.swarmId);
-    const jobs = jobManager.listJobsWithAgentCounts(swarmId);
+    const jobs = roleManager.listRolesWithAgentCounts(swarmId);
     res.json({ jobs });
   } catch (err) {
     logger.error({ error: err }, 'GET /swarms/:id/jobs failed');
@@ -147,16 +167,16 @@ router.get('/swarms/:swarmId/jobs', async (req: Request, res: Response) => {
  * GET /swarms/:swarmId/jobs/:jobId
  * Get a specific job
  */
-router.get('/swarms/:swarmId/jobs/:jobId', async (req: Request, res: Response) => {
+router.get(['/swarms/:swarmId/jobs/:jobId', '/swarms/:swarmId/roles/:jobId'], async (req: Request, res: Response) => {
   try {
     const jobId = String(req.params.jobId);
-    const job = jobManager.getJobById(jobId);
+    const job = roleManager.getRoleById(jobId);
 
     if (!job) {
       return res.status(404).json({ error: 'Job not found' });
     }
 
-    const agentsCount = jobManager.countAgentsForJob(jobId);
+    const agentsCount = roleManager.countAgentsForRole(jobId);
     res.json({ ...job, agents_count: agentsCount });
   } catch (err) {
     logger.error({ error: err }, 'GET /swarms/:id/jobs/:id failed');
@@ -168,7 +188,7 @@ router.get('/swarms/:swarmId/jobs/:jobId', async (req: Request, res: Response) =
  * GET /swarms/:swarmId/jobs/:jobId/agents
  * List agents hired for a specific job
  */
-router.get('/swarms/:swarmId/jobs/:jobId/agents', async (req: Request, res: Response) => {
+router.get(['/swarms/:swarmId/jobs/:jobId/agents', '/swarms/:swarmId/roles/:jobId/agents'], async (req: Request, res: Response) => {
   try {
     const swarmId = String(req.params.swarmId);
     const jobId = String(req.params.jobId);
@@ -183,7 +203,7 @@ router.get('/swarms/:swarmId/jobs/:jobId/agents', async (req: Request, res: Resp
     }
 
     const agents = db
-      .prepare('SELECT * FROM agents WHERE swarm_id = ? AND job_id = ? ORDER BY created_at DESC')
+      .prepare('SELECT * FROM agents WHERE swarm_id = ? AND COALESCE(role_id, job_id) = ? ORDER BY created_at DESC')
       .all(swarmId, jobId);
 
     return res.json({ agents });
@@ -197,7 +217,7 @@ router.get('/swarms/:swarmId/jobs/:jobId/agents', async (req: Request, res: Resp
  * PUT /swarms/:swarmId/jobs/:jobId
  * Update a job
  */
-router.put('/swarms/:swarmId/jobs/:jobId', async (req: Request, res: Response) => {
+router.put(['/swarms/:swarmId/jobs/:jobId', '/swarms/:swarmId/roles/:jobId'], async (req: Request, res: Response) => {
   try {
     const jobId = String(req.params.jobId);
     const { system_prompt } = req.body;
@@ -206,8 +226,8 @@ router.put('/swarms/:swarmId/jobs/:jobId', async (req: Request, res: Response) =
       return res.status(400).json({ error: 'Missing required field: system_prompt' });
     }
 
-    await jobManager.updateJobSystemPrompt(jobId, system_prompt);
-    const updatedJob = jobManager.getJobById(jobId);
+    await roleManager.updateRoleSystemPrompt(jobId, system_prompt);
+    const updatedJob = roleManager.getRoleById(jobId);
 
     res.json(updatedJob);
   } catch (err) {
@@ -220,11 +240,11 @@ router.put('/swarms/:swarmId/jobs/:jobId', async (req: Request, res: Response) =
  * DELETE /swarms/:swarmId/jobs/:jobId
  * Delete a job
  */
-router.delete('/swarms/:swarmId/jobs/:jobId', async (req: Request, res: Response) => {
+router.delete(['/swarms/:swarmId/jobs/:jobId', '/swarms/:swarmId/roles/:jobId'], async (req: Request, res: Response) => {
   try {
     const jobId = String(req.params.jobId);
 
-    await jobManager.deleteJob(jobId);
+    await roleManager.deleteRole(jobId);
     res.status(204).send();
   } catch (err) {
     logger.error({ error: err }, 'DELETE /swarms/:id/jobs/:id failed');

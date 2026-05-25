@@ -143,6 +143,23 @@ describe('Jobs API', () => {
     expect(response.status).toBe(400);
   });
 
+  it('creates a global role without provider/model by using defaults', async () => {
+    const app = createTestApp();
+
+    const response = await request(app)
+      .post('/roles')
+      .send({
+        title: 'generalist',
+        system_prompt: 'Handle broad tasks safely',
+      });
+
+    expect(response.status).toBe(201);
+    expect(typeof response.body.provider).toBe('string');
+    expect(response.body.provider.length).toBeGreaterThan(0);
+    expect(typeof response.body.model).toBe('string');
+    expect(response.body.model.length).toBeGreaterThan(0);
+  });
+
   it('hires agents for a job and lists agents per job', async () => {
     const app = createTestApp();
     const swarmId = insertSwarm();

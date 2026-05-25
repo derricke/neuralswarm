@@ -221,7 +221,7 @@ export default function SwarmControlPage() {
     setJobsMessage('');
 
     try {
-      const result = await fetchJson<{ jobs: JobRow[] }>(`/swarms/${activeSwarmId}/jobs`);
+      const result = await fetchJson<{ jobs: JobRow[] }>(`/swarms/${activeSwarmId}/roles`);
       setJobs(result.jobs);
       setJobsMessage(`Loaded ${result.jobs.length} job(s)`);
     } catch (err) {
@@ -338,7 +338,7 @@ export default function SwarmControlPage() {
             <span className="kicker">Swarm control</span>
             <h1 className="heroTitle">Configure jobs, submit tasks, and start a swarm</h1>
             <p className="heroCopy">
-              Jobs are optional. Create jobs in the global catalog, then assign them to each swarm. If you skip jobs,
+              Roles are optional. Create roles in the global catalog, then assign them to each swarm. If you skip roles,
               the coordinator auto-picks agents on the backend when starting the swarm.
             </p>
           </div>
@@ -457,22 +457,22 @@ export default function SwarmControlPage() {
             </div>
             <div className="actions" style={{ marginTop: '1rem' }}>
               <button type="button" className="button" onClick={loadJobs} disabled={busy || !canAct}>
-                Load jobs
+                Load roles
               </button>
               <button type="button" className="button buttonPrimary" onClick={startSwarm} disabled={busy || !canAct}>
                 Start swarm
               </button>
               <a
                 className="button"
-                href={canAct ? `/jobs/create?swarmId=${encodeURIComponent(activeSwarmIdValue)}` : '/jobs/create'}
+                href={canAct ? `/roles/create?swarmId=${encodeURIComponent(activeSwarmIdValue)}` : '/roles/create'}
               >
-                Create Job
+                Create Role
               </a>
               <a
                 className="button"
-                href={canAct ? `/swarms/manage-jobs?swarmId=${encodeURIComponent(activeSwarmIdValue)}` : '/swarms/manage-jobs'}
+                href={canAct ? `/swarms/manage-roles?swarmId=${encodeURIComponent(activeSwarmIdValue)}` : '/swarms/manage-roles'}
               >
-                Assign Jobs
+                Assign Roles
               </a>
               {canAct && (
                 <button type="button" className="button" style={{ borderColor: 'var(--status-failed)', color: 'var(--status-failed)' }} onClick={deleteSwarm} disabled={busy}>
@@ -520,7 +520,7 @@ export default function SwarmControlPage() {
 
           <article className="formCard">
             <div className="sectionHeader">
-              <h2>Current jobs</h2>
+              <h2>Current roles</h2>
               <span className="tag">overview</span>
             </div>
             {jobs.length > 0 ? (
@@ -546,7 +546,7 @@ export default function SwarmControlPage() {
               </table>
             ) : (
               <div className="emptyState">
-                No jobs yet. Use <a href={canAct ? `/jobs/create?swarmId=${encodeURIComponent(activeSwarmIdValue)}` : '/jobs/create'} style={{ color: 'var(--accent)', textDecoration: 'underline' }}>Create Job</a> to add to the global catalog, then <a href={canAct ? `/swarms/manage-jobs?swarmId=${encodeURIComponent(activeSwarmIdValue)}` : '/swarms/manage-jobs'} style={{ color: 'var(--accent)', textDecoration: 'underline' }}>Assign Jobs</a> for this swarm.
+                No roles yet. Use <a href={canAct ? `/roles/create?swarmId=${encodeURIComponent(activeSwarmIdValue)}` : '/roles/create'} style={{ color: 'var(--accent)', textDecoration: 'underline' }}>Create Role</a> to add to the global catalog, then <a href={canAct ? `/swarms/manage-roles?swarmId=${encodeURIComponent(activeSwarmIdValue)}` : '/swarms/manage-roles'} style={{ color: 'var(--accent)', textDecoration: 'underline' }}>Assign Roles</a> for this swarm.
               </div>
             )}
           </article>
@@ -558,7 +558,7 @@ export default function SwarmControlPage() {
             </div>
             <form onSubmit={submitTasks} className="stack">
               <div className="field">
-                <label htmlFor="required-job">Assign to job (optional, title or id)</label>
+                <label htmlFor="required-job">Assign to role (optional, title or id)</label>
                 <input
                   id="required-job"
                   list="job-options"

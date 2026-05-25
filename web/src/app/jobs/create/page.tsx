@@ -5,18 +5,15 @@ import { useSearchParams } from 'next/navigation';
 import { fetchJson } from '@/lib/api';
 
 type SubmitState = 'idle' | 'loading' | 'success' | 'error';
-type Provider = 'openai' | 'anthropic' | 'google' | 'ollama';
 
 type GlobalJob = {
   id: string;
   title: string;
   description?: string;
-  provider: Provider;
+  provider: string;
   model: string;
   system_prompt: string;
 };
-
-const PROVIDERS: Provider[] = ['openai', 'anthropic', 'google', 'ollama'];
 
 export default function CreateJobPage() {
   const searchParams = useSearchParams();
@@ -24,8 +21,8 @@ export default function CreateJobPage() {
 
   const [title, setTitle] = useState('coder');
   const [description, setDescription] = useState('');
-  const [provider, setProvider] = useState<Provider>('openai');
-  const [model, setModel] = useState('gpt-4o');
+  const [provider, setProvider] = useState('');
+  const [model, setModel] = useState('');
   const [systemPrompt, setSystemPrompt] = useState('You are a coding specialist.');
 
   const [jobs, setJobs] = useState<GlobalJob[]>([]);
@@ -33,12 +30,12 @@ export default function CreateJobPage() {
   const [message, setMessage] = useState('');
 
   const canSave = useMemo(
-    () => title.trim().length > 0 && model.trim().length > 0 && systemPrompt.trim().length > 0,
-    [title, model, systemPrompt]
+    () => title.trim().length > 0 && systemPrompt.trim().length > 0,
+    [title, systemPrompt]
   );
 
   useEffect(() => {
-    fetchJson<{ jobs: GlobalJob[] }>('/jobs')
+    fetchJson<{ jobs: GlobalJob[] }>('/roles')
       .then((result) => setJobs(result.jobs))
       .catch(() => setJobs([]));
   }, []);
@@ -47,7 +44,7 @@ export default function CreateJobPage() {
     e.preventDefault();
 
     if (!canSave) {
-      setMessage('Title, model, and system prompt are required');
+      setMessage('Title and system prompt are required');
       setState('error');
       return;
     }
@@ -58,23 +55,24 @@ export default function CreateJobPage() {
     const payload = {
       title: title.trim(),
       description: description.trim(),
-      provider,
-      model: model.trim(),
+      provider: provider.trim() || undefined,
+      model: model.trim() || undefined,
       system_prompt: systemPrompt.trim(),
+      recommendation_swarm_id: returnSwarmId || undefined,
     };
 
     try {
-      await fetchJson<GlobalJob>('/jobs', {
+      await fetchJson<GlobalJob>('/roles', {
         method: 'POST',
         body: JSON.stringify(payload),
       });
 
-      const result = await fetchJson<{ jobs: GlobalJob[] }>('/jobs');
+      const result = await fetchJson<{ jobs: GlobalJob[] }>('/roles');
       setJobs(result.jobs);
-      setMessage(`Saved global job "${payload.title}"`);
+      setMessage(`Saved global role "${payload.title}"`);
       setState('success');
     } catch (err) {
-      setMessage(err instanceof Error ? err.message : 'Failed to save global job');
+      setMessage(err instanceof Error ? err.message : 'Failed to save global role');
       setState('error');
     }
   }
@@ -84,17 +82,17 @@ export default function CreateJobPage() {
       <div className="container">
         <section className="hero">
           <div className="heroCard">
-            <span className="kicker">Global job catalog</span>
-            <h1 className="heroTitle">Create Job</h1>
+            <span className="kicker">Global role catalog</span>
+            <h1 className="heroTitle">Create Role</h1>
             <p className="heroCopy">
-              Create reusable global jobs here, then assign them to any swarm from the manage jobs page.
+              Create reusable global roles here, then assign them to any swarm from the manage roles page.
             </p>
           </div>
         </section>
 
         <article className="formCard">
           <div className="sectionHeader">
-            <h2>New global job</h2>
+            <h2>New global role</h2>
             <span className="tag">form</span>
           </div>
           <form onSubmit={handleSave} className="stack">
@@ -108,27 +106,35 @@ export default function CreateJobPage() {
             </div>
             <div className="field">
               <label htmlFor="job-provider">Provider</label>
-              <select id="job-provider" value={provider} onChange={(e) => setProvider(e.target.value as Provider)} disabled={state === 'loading'}>
-                {PROVIDERS.map((p) => (
-                  <option key={p} value={p}>{p}</option>
-                ))}
-              </select>
+              <input
+                id="job-provider"
+                value={provider}
+                onChange={(e) => setProvider(e.target.value)}
+                placeholder="Auto-select from available keys (optional override)"
+                disabled={state === 'loading'}
+              />
             </div>
             <div className="field">
               <label htmlFor="job-model">Model</label>
-              <input id="job-model" value={model} onChange={(e) => setModel(e.target.value)} disabled={state === 'loading'} />
+              <input
+                id="job-model"
+                value={model}
+                onChange={(e) => setModel(e.target.value)}
+                placeholder="Auto-select default model (optional override)"
+                disabled={state === 'loading'}
+              />
             </div>
             <div className="field">
               <label htmlFor="job-prompt">System prompt</label>
               <textarea id="job-prompt" value={systemPrompt} onChange={(e) => setSystemPrompt(e.target.value)} disabled={state === 'loading'} />
             </div>
             <div className="actions">
-              <button type="submit" className="button buttonPrimary" disabled={state === 'loading' || !canSave}>Save global job</button>
+              <button type="submit" className="button buttonPrimary" disabled={state === 'loading' || !canSave}>Save global role</button>
               <a
                 className="button"
-                href={returnSwarmId ? `/swarms/manage-jobs?swarmId=${encodeURIComponent(returnSwarmId)}` : '/swarms/manage-jobs'}
+                href={returnSwarmId ? `/swarms/manage-roles?swarmId=${encodeURIComponent(returnSwarmId)}` : '/swarms/manage-roles'}
               >
-                Assign to swarm
+                Assign role to swarm
               </a>
             </div>
           </form>
@@ -137,7 +143,7 @@ export default function CreateJobPage() {
 
         <article className="formCard" style={{ marginTop: '1rem' }}>
           <div className="sectionHeader">
-            <h2>Global jobs</h2>
+            <h2>Global roles</h2>
             <span className="tag">{jobs.length} total</span>
           </div>
           {jobs.length > 0 ? (
@@ -160,7 +166,7 @@ export default function CreateJobPage() {
               </tbody>
             </table>
           ) : (
-            <div className="emptyState">No global jobs saved yet.</div>
+            <div className="emptyState">No global roles saved yet.</div>
           )}
         </article>
       </div>

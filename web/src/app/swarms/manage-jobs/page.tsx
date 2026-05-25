@@ -157,7 +157,7 @@ export default function ManageJobsPage() {
   }, []);
 
   useEffect(() => {
-    fetchJson<{ jobs: GlobalJob[] }>('/jobs')
+    fetchJson<{ jobs: GlobalJob[] }>('/roles')
       .then((result) => setGlobalJobs(result.jobs))
       .catch(() => setGlobalJobs([]));
   }, []);
@@ -183,7 +183,7 @@ export default function ManageJobsPage() {
       return;
     }
 
-    fetchJson<{ jobs: JobRow[] }>(`/swarms/${activeSwarmId}/jobs`)
+    fetchJson<{ jobs: JobRow[] }>(`/swarms/${activeSwarmId}/roles`)
       .then((result) => setJobs(result.jobs))
       .catch(() => setJobs([]));
   }, [canAct, activeSwarmId]);
@@ -193,7 +193,7 @@ export default function ManageJobsPage() {
       return;
     }
 
-    const result = await fetchJson<{ jobs: JobRow[] }>(`/swarms/${activeSwarmId}/jobs`);
+    const result = await fetchJson<{ jobs: JobRow[] }>(`/swarms/${activeSwarmId}/roles`);
     setJobs(result.jobs);
   }
 
@@ -214,7 +214,7 @@ export default function ManageJobsPage() {
     setMessage('');
 
     try {
-      await fetchJson<JobRow>(`/swarms/${activeSwarmId}/jobs`, {
+      await fetchJson<JobRow>(`/swarms/${activeSwarmId}/roles`, {
         method: 'POST',
         body: JSON.stringify({ global_job_id: selectedGlobalJobId }),
       });
@@ -258,10 +258,10 @@ export default function ManageJobsPage() {
       <div className="container">
         <section className="hero">
           <div className="heroCard">
-            <span className="kicker">Job management</span>
-            <h1 className="heroTitle">Manage Jobs</h1>
+            <span className="kicker">Role management</span>
+            <h1 className="heroTitle">Manage Roles</h1>
             <p className="heroCopy">
-              Choose from global jobs and add them to this swarm.
+              Choose from global roles and add them to this swarm.
             </p>
           </div>
         </section>
@@ -408,18 +408,18 @@ export default function ManageJobsPage() {
 
         <article className="formCard" style={{ marginTop: '1rem' }}>
           <div className="sectionHeader">
-            <h2>Add from global jobs</h2>
+            <h2>Add from global roles</h2>
             <span className="tag">catalog</span>
           </div>
           <div className="field">
-            <label htmlFor="saved-template">Global job</label>
+            <label htmlFor="saved-template">Global role</label>
             <select
               id="saved-template"
               value={selectedGlobalJobId}
               onChange={(e) => setSelectedGlobalJobId(e.target.value)}
               disabled={state === 'loading'}
             >
-              <option value="">Select a global job</option>
+              <option value="">Select a global role</option>
               {globalJobs.map((job) => (
                 <option key={job.id} value={job.id}>
                   {job.title} ({job.provider}/{job.model})
@@ -429,10 +429,10 @@ export default function ManageJobsPage() {
           </div>
           <div className="actions">
             <button type="button" className="button buttonPrimary" onClick={addFromCatalog} disabled={state === 'loading' || !canAct || !selectedGlobalJobId}>
-              Assign job to swarm
+              Assign role to swarm
             </button>
-            <a className="button" href={canAct ? `/jobs/create?swarmId=${encodeURIComponent(activeSwarmIdValue)}` : '/jobs/create'}>
-              Create Job
+            <a className="button" href={canAct ? `/roles/create?swarmId=${encodeURIComponent(activeSwarmIdValue)}` : '/roles/create'}>
+              Create Role
             </a>
             <a className="button" href={canAct ? `/swarms/control?swarmId=${encodeURIComponent(activeSwarmIdValue)}` : '/swarms/control'}>
               Back to swarm control
@@ -443,7 +443,7 @@ export default function ManageJobsPage() {
 
         <article className="formCard" style={{ marginTop: '1rem' }}>
           <div className="sectionHeader">
-            <h2>Current swarm jobs</h2>
+            <h2>Current swarm roles</h2>
             <span className="tag">{jobs.length} total</span>
           </div>
           {jobs.length > 0 ? (
@@ -468,7 +468,7 @@ export default function ManageJobsPage() {
               </tbody>
             </table>
           ) : (
-            <div className="emptyState">No jobs loaded for this swarm yet.</div>
+            <div className="emptyState">No roles loaded for this swarm yet.</div>
           )}
         </article>
       </div>
