@@ -17,11 +17,21 @@ export default function RoleListPage() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetchJson<{ jobs: GlobalJob[] }>('/jobs')
+    fetchJson<{ jobs: GlobalJob[] }>('/roles')
       .then((data) => setRoles(data.jobs))
       .catch((err) => console.error(err))
       .finally(() => setLoading(false));
   }, []);
+
+  async function handleDelete(id: string) {
+    if (!confirm('Are you sure you want to delete this role?')) return;
+    try {
+      await fetchJson(`/roles/${id}`, { method: 'DELETE' });
+      setRoles(roles.filter(j => j.id !== id));
+    } catch (err) {
+      alert('Failed to delete role');
+    }
+  }
 
   return (
     <main className="shell">
@@ -53,6 +63,7 @@ export default function RoleListPage() {
                 <tr>
                   <th>Title</th>
                   <th>Description</th>
+                  <th style={{ width: '120px' }}>Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -62,6 +73,20 @@ export default function RoleListPage() {
                       <div className="listTitle">{role.title}</div>
                     </td>
                     <td>{role.description || '-'}</td>
+                    <td style={{ display: 'flex', gap: '8px' }}>
+                      <a
+                        className="button buttonSecondary"
+                        href={`/role/edit/${role.id}`}
+                      >
+                        Edit
+                      </a>
+                      <button
+                        className="button buttonDanger"
+                        onClick={() => handleDelete(role.id)}
+                      >
+                        Delete
+                      </button>
+                    </td>
                   </tr>
                 ))}
               </tbody>

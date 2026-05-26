@@ -1,30 +1,43 @@
 'use client';
 
 import { Suspense, useEffect, useMemo, useState } from 'react';
-import { useSearchParams } from 'next/navigation';
+import { useParams, useSearchParams } from 'next/navigation';
 import { fetchJson } from '@/lib/api';
 
 type SubmitState = 'idle' | 'loading' | 'success' | 'error';
 
-export default function CreateJobPageWrapper() {
+type GlobalJob = {
+  id: string;
+  title: string;
+  description?: string;
+  provider: string;
+  model: string;
+  system_prompt: string;
+  mcpServers?: any[];
+};
+
+export default function EditJobPageWrapper() {
   return (
     <Suspense fallback={<div>Loading...</div>}>
-      <CreateJobPage />
+      <EditJobPage />
     </Suspense>
   );
 }
 
-function CreateJobPage() {
+function EditJobPage() {
+  const params = useParams();
+  const id = params.id as string;
+  
   const searchParams = useSearchParams();
   const returnSwarmId = searchParams.get('swarmId')?.trim() ?? '';
 
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
-  const [systemPrompt, setSystemPrompt] = useState('You are a helpful agent.');
+  const [systemPrompt, setSystemPrompt] = useState('');
   const [availableMcpServers, setAvailableMcpServers] = useState<any[]>([]);
   const [selectedMcpServers, setSelectedMcpServers] = useState<string[]>([]);
 
-  const [state, setState] = useState<SubmitState>('idle');
+  const [state, setState] = useState<SubmitState>('loading');
   const [message, setMessage] = useState('');
 
   const canSave = useMemo(
@@ -33,10 +46,32 @@ function CreateJobPage() {
   );
 
   useEffect(() => {
-    fetchJson<{ servers: any[] }>('/mcp-servers')
-      .then((result) => setAvailableMcpServers(result.servers))
-      .catch(() => setAvailableMcpServers([]));
-  }, []);
+    Promise.all([
+      fetchJson<{ jobs: GlobalJob[] }>('/roles'),
+      fetchJson<{ servers: any[] }>('/mcp-servers')
+    ])
+    .then(([rolesRes, serversRes]) => {
+      setAvailableMcpServers(serversRes.servers || []);
+      const role = rolesRes.jobs.find(r => r.id === id);
+      if (role) {
+        setTitle(role.title);
+        setDescription(role.description || '');
+        setSystemPrompt(role.system_prompt || '');
+        const serverIds = (role.mcpServers || [])
+          .map((s: any) => (serversRes.servers || []).find(as => as.name === s.name)?.id)
+          .filter(Boolean);
+        setSelectedMcpServers(serverIds as string[]);
+        setState('idle');
+      } else {
+        setMessage('Role not found');
+        setState('error');
+      }
+    })
+    .catch((err) => {
+      setMessage('Failed to load role');
+      setState('error');
+    });
+  }, [id]);
 
   async function handleSave(e: React.FormEvent) {
     e.preventDefault();
@@ -56,23 +91,18 @@ function CreateJobPage() {
       provider: 'auto',
       model: 'auto',
       system_prompt: systemPrompt,
-      mcp_servers: selectedMcpServers.map(id => availableMcpServers.find(s => s.id === id)?.name).filter(Boolean)
+      mcp_servers: selectedMcpServers.map(sid => availableMcpServers.find(s => s.id === sid)?.name).filter(Boolean)
     };
 
     try {
-      await fetchJson('/roles', {
-        method: 'POST',
+      await fetchJson(`/roles/${id}`, {
+        method: 'PUT',
         body: JSON.stringify(payload),
       });
-      setMessage('Global role created successfully');
-
+      setMessage('Global role updated successfully');
       setState('success');
-      setTitle('');
-      setDescription('');
-      setSystemPrompt('You are a helpful agent.');
-      setSelectedMcpServers([]);
     } catch (err) {
-      setMessage(err instanceof Error ? err.message : 'Failed to save global role');
+      setMessage(err instanceof Error ? err.message : 'Failed to update global role');
       setState('error');
     }
   }
@@ -83,16 +113,16 @@ function CreateJobPage() {
         <section className="hero">
           <div className="heroCard">
             <span className="kicker">Global role catalog</span>
-            <h1 className="heroTitle">Create Role</h1>
+            <h1 className="heroTitle">Edit Role</h1>
             <p className="heroCopy">
-              Create reusable global roles here, then assign them to any swarm from the manage roles page.
+              Modify the properties of your global role.
             </p>
           </div>
         </section>
 
         <article className="formCard">
           <div className="sectionHeader">
-            <h2>New global role</h2>
+            <h2>Edit global role</h2>
             <span className="tag">form</span>
           </div>
           <form onSubmit={handleSave} className="stack">
@@ -122,7 +152,7 @@ function CreateJobPage() {
                           if (e.target.checked) {
                             setSelectedMcpServers([...selectedMcpServers, server.id]);
                           } else {
-                            setSelectedMcpServers(selectedMcpServers.filter(id => id !== server.id));
+                            setSelectedMcpServers(selectedMcpServers.filter(sid => sid !== server.id));
                           }
                         }}
                         disabled={state === 'loading'}
@@ -137,13 +167,13 @@ function CreateJobPage() {
             </div>
             <div className="actions">
               <button type="submit" className="button buttonPrimary" disabled={state === 'loading' || !canSave}>
-                Save global role
+                Update global role
               </button>
               <a
-                className="button"
-                href={returnSwarmId ? `/swarm/manage-roles?swarmId=${encodeURIComponent(returnSwarmId)}` : '/swarm/manage-roles'}
+                className="button buttonSecondary"
+                href="/role"
               >
-                Assign role to swarm
+                Back to roles
               </a>
             </div>
           </form>
