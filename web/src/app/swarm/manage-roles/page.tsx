@@ -439,11 +439,11 @@ function ManageJobsPage() {
             <button type="button" className="button buttonPrimary" onClick={addFromCatalog} disabled={state === 'loading' || !canAct || !selectedGlobalJobId}>
               Assign role to swarm
             </button>
-            <a className="button" href={canAct ? `/roles/create?swarmId=${encodeURIComponent(activeSwarmIdValue)}` : '/roles/create'}>
+            <a className="button" href={canAct ? `/role/create?swarmId=${encodeURIComponent(activeSwarmIdValue)}` : '/role/create'}>
               Create Role
             </a>
-            <a className="button" href={canAct ? `/swarms/control?swarmId=${encodeURIComponent(activeSwarmIdValue)}` : '/swarms/control'}>
-              Back to swarm control
+            <a className="button" href={canAct ? `/swarm/edit?swarmId=${encodeURIComponent(activeSwarmIdValue)}` : '/swarm/edit'}>
+              Back to dashboard
             </a>
           </div>
           {message ? <div className={`notice ${state === 'error' ? 'error' : ''}`}>{message}</div> : null}

@@ -5,9 +5,9 @@ import { usePathname } from 'next/navigation';
 
 const NAV_ITEMS = [
   { href: '/', label: 'Home' },
-  { href: '/swarms/control', label: 'Swarms' },
-  { href: '/roles/create', label: 'Roles' },
-  { href: '/tasks/upload', label: 'Tasks' },
+  { href: '/swarm', label: 'Swarms' },
+  { href: '/role', label: 'Roles' },
+  { href: '/task', label: 'Tasks' },
   { href: '/mcp', label: 'MCP Servers' },
 ] as const;
 

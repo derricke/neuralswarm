@@ -553,18 +553,22 @@ function SwarmControlPage() {
               <button type="button" className="button buttonPrimary" onClick={startSwarm} disabled={busy || !canAct}>
                 Start swarm
               </button>
-              <a
-                className="button"
-                href={canAct ? `/roles/create?swarmId=${encodeURIComponent(activeSwarmIdValue)}` : '/roles/create'}
-              >
-                Create Role
-              </a>
-              <a
-                className="button"
-                href={canAct ? `/swarms/manage-roles?swarmId=${encodeURIComponent(activeSwarmIdValue)}` : '/swarms/manage-roles'}
-              >
-                Assign Roles
-              </a>
+              <div className="chipRow">
+                <a
+                  href={canAct ? `/role/create?swarmId=${encodeURIComponent(activeSwarmIdValue)}` : '/role/create'}
+                  className="chip"
+                  onClick={(e) => { if (!canAct) e.preventDefault(); }}
+                >
+                  Create Role
+                </a>
+                <a
+                  href={canAct ? `/swarm/manage-roles?swarmId=${encodeURIComponent(activeSwarmIdValue)}` : '/swarm/manage-roles'}
+                  className="chip"
+                  onClick={(e) => { if (!canAct) e.preventDefault(); }}
+                >
+                  Assign Roles
+                </a>
+              </div>
               {canAct && (
                 <button type="button" className="button" style={{ borderColor: 'var(--status-failed)', color: 'var(--status-failed)' }} onClick={deleteSwarm} disabled={busy}>
                   Delete Swarm
@@ -633,7 +637,7 @@ function SwarmControlPage() {
               </table>
             ) : (
               <div className="emptyState">
-                No roles yet. Use <a href={canAct ? `/roles/create?swarmId=${encodeURIComponent(activeSwarmIdValue)}` : '/roles/create'} style={{ color: 'var(--accent)', textDecoration: 'underline' }}>Create Role</a> to add to the global catalog, then <a href={canAct ? `/swarms/manage-roles?swarmId=${encodeURIComponent(activeSwarmIdValue)}` : '/swarms/manage-roles'} style={{ color: 'var(--accent)', textDecoration: 'underline' }}>Assign Roles</a> for this swarm.
+                No roles yet. Use <a href={canAct ? `/role/create?swarmId=${encodeURIComponent(activeSwarmIdValue)}` : '/role/create'} style={{ color: 'var(--accent)', textDecoration: 'underline' }}>Create Role</a> to add to the global catalog, then <a href={canAct ? `/swarm/manage-roles?swarmId=${encodeURIComponent(activeSwarmIdValue)}` : '/swarm/manage-roles'} style={{ color: 'var(--accent)', textDecoration: 'underline' }}>Assign Roles</a> for this swarm.
               </div>
             )}
           </article>

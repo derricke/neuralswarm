@@ -191,7 +191,7 @@ function CreateJobPage() {
               )}
               <a
                 className="button"
-                href={returnSwarmId ? `/swarms/manage-roles?swarmId=${encodeURIComponent(returnSwarmId)}` : '/swarms/manage-roles'}
+                href={returnSwarmId ? `/swarm/manage-roles?swarmId=${encodeURIComponent(returnSwarmId)}` : '/swarm/manage-roles'}
               >
                 Assign role to swarm
               </a>

@@ -128,10 +128,10 @@ export async function Dashboard() {
             </div>
 
             <div className="chipRow" style={{ marginTop: '1rem' }}>
-              <a href="/swarms/create" className="chip">Create swarm</a>
-              <a href="/jobs/create" className="chip">Create job</a>
-              <a href="/swarms/control" className="chip">Control swarm</a>
-              <a href="/tasks/upload" className="chip">Add Tasks</a>
+              <a href="/swarm/create" className="chip">Create swarm</a>
+              <a href="/role/create" className="chip">Add roles</a>
+              <a href="/swarm" className="chip">Control swarm</a>
+              <a href="/task/upload" className="chip">Add Tasks</a>
             </div>
           </div>
 
@@ -222,12 +222,12 @@ export async function Dashboard() {
                   {swarms.slice(0, 5).map((swarm) => (
                     <tr key={swarm.id}>
                       <td>
-                        <a className="listTitle" href={`/swarms/control?swarmId=${encodeURIComponent(swarm.id)}`}>
+                        <a className="listTitle" href={`/swarm/edit?swarmId=${encodeURIComponent(swarm.id)}`}>
                           {swarm.name}
                         </a>
                       </td>
                       <td className="mono">
-                        <a href={`/swarms/control?swarmId=${encodeURIComponent(swarm.id)}`}>{swarm.id.slice(0, 8)}…</a>
+                        <a href={`/swarm/edit?swarmId=${encodeURIComponent(swarm.id)}`}>{swarm.id.slice(0, 8)}…</a>
                       </td>
                       <td>{formatDate(swarm.created_at)}</td>
                     </tr>
@@ -237,7 +237,7 @@ export async function Dashboard() {
             ) : (
               <div className="emptyState">
                 No swarms yet.{' '}
-                <a href="/swarms/create" style={{ color: 'var(--accent)', textDecoration: 'underline' }}>
+                <a href="/swarm/create" style={{ color: 'var(--accent)', textDecoration: 'underline' }}>
                   Create one
                 </a>
                 .
@@ -318,7 +318,7 @@ export async function Dashboard() {
               ) : (
                 <div className="emptyState">
                   No tasks submitted yet.{' '}
-                  <a href="/tasks/upload" style={{ color: 'var(--accent)', textDecoration: 'underline' }}>
+                  <a href="/task/upload" style={{ color: 'var(--accent)', textDecoration: 'underline' }}>
                     Submit some
                   </a>
                   .
