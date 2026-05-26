@@ -182,12 +182,12 @@ export async function Dashboard() {
                       </div>
                       <div className="listSub">Recommended for the latest task</div>
                     </div>
-                    <strong>{Math.round(liveRecommendation.similarity * 100)}%</strong>
+                    <strong>{liveRecommendation.similarity != null && !isNaN(liveRecommendation.similarity) ? `${Math.round(liveRecommendation.similarity * 100)}%` : 'N/A'}</strong>
                   </div>
                   <div className="chipRow">
                     {learning?.similar.slice(0, 3).map((entry) => (
                       <span key={`${entry.provider}-${entry.model}`} className="chip">
-                        {entry.provider}/{entry.model} · {Math.round(entry.similarity * 100)}%
+                        {entry.provider}/{entry.model} · {entry.similarity != null && !isNaN(entry.similarity) ? `${Math.round(entry.similarity * 100)}%` : 'N/A'}
                       </span>
                     ))}
                   </div>
