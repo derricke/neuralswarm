@@ -55,6 +55,8 @@ type TaskRow = {
   result: string | null;
   error: string | null;
   complexity: 'high' | 'low';
+  project_context?: string;
+  mcp_servers?: string;
 };
 
 type JobRow = {
@@ -287,7 +289,12 @@ export async function runTask(taskId: string): Promise<void> {
         }
       } catch (e) {}
 
-      const baseAutonomousPrompt = `You are an autonomous AI agent in a non-interactive swarm framework. You MUST execute the user's task using the provided tools. NEVER ask for permission, NEVER ask clarifying questions, and NEVER wait for user input. Make reasonable assumptions to complete the task fully. If you need to create a project, just do it with default names if not specified. IMPORTANT: First use directory listing or search tools to explore the workspace and find relevant files before modifying them!${topLevelFiles}`;
+      let baseAutonomousPrompt = `You are an autonomous AI agent in a non-interactive swarm framework. You MUST execute the user's task using the provided tools. NEVER ask for permission, NEVER ask clarifying questions, and NEVER wait for user input. Make reasonable assumptions to complete the task fully. If you need to create a project, just do it with default names if not specified. IMPORTANT: First use directory listing or search tools to explore the workspace and find relevant files before modifying them!${topLevelFiles}`;
+      
+      if (task.project_context) {
+        baseAutonomousPrompt += `\\n\\nPROJECT MANAGEMENT CONTEXT:\\n${task.project_context}`;
+      }
+
       systemPrompt = systemPrompt ? `${baseAutonomousPrompt}\\n\\n${systemPrompt}` : baseAutonomousPrompt;
 
       if (job?.failure_patterns) {
@@ -302,11 +309,18 @@ export async function runTask(taskId: string): Promise<void> {
         } catch (e) {}
       }
 
-      let mcpServerIds = job?.mcp_servers ? JSON.parse(job.mcp_servers) : undefined;
+      let mcpServerIds: string[] | undefined;
+      
+      if (job?.mcp_servers) {
+        mcpServerIds = JSON.parse(job.mcp_servers);
+      } else if (task.mcp_servers) {
+        mcpServerIds = JSON.parse(task.mcp_servers);
+      }
+      
       if (!mcpServerIds) {
-        // If no job or no specific servers, provide all servers as fallback
-        const allServers = db.prepare('SELECT id FROM mcp_servers').all() as Array<{ id: string }>;
-        mcpServerIds = allServers.map(s => s.id);
+        // If neither the job nor the task assigned specific servers, we provide an empty array
+        // (as per project management rules: agents only get what they explicitly need).
+        mcpServerIds = [];
       }
 
       const config: AgentConfig = {

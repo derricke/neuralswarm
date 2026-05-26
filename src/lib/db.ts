@@ -264,6 +264,8 @@ function runMigrations(db: Database.Database) {
   ensureColumnExists(db, 'swarm_jobs', 'mcp_servers', "TEXT DEFAULT '[]'");
   ensureColumnExists(db, 'tasks', 'parent_id', "TEXT REFERENCES tasks(id) ON DELETE SET NULL");
   ensureColumnExists(db, 'tasks', 'complexity', "TEXT DEFAULT 'high'");
+  ensureColumnExists(db, 'tasks', 'mcp_servers', "TEXT");
+  ensureColumnExists(db, 'tasks', 'project_context', "TEXT");
 
   db.exec(`
     CREATE INDEX IF NOT EXISTS idx_swarm_jobs_global_job ON swarm_jobs(global_job_id);
@@ -347,6 +349,8 @@ function migrateTasksTable(db: Database.Database) {
         required_job TEXT REFERENCES swarm_jobs(id),
         parent_id   TEXT REFERENCES tasks(id) ON DELETE SET NULL,
         complexity  TEXT DEFAULT 'high',
+        mcp_servers TEXT,
+        project_context TEXT,
         description TEXT NOT NULL,
         status      TEXT NOT NULL DEFAULT 'pending',
         retries     INTEGER NOT NULL DEFAULT 0,
@@ -356,8 +360,8 @@ function migrateTasksTable(db: Database.Database) {
         updated_at  INTEGER NOT NULL DEFAULT (unixepoch())
       );
       
-      INSERT INTO tasks_new (id, swarm_id, agent_id, required_job, parent_id, complexity, description, status, retries, result, error, created_at, updated_at)
-      SELECT id, swarm_id, agent_id, required_job, parent_id, complexity, description, status, retries, result, error, created_at, updated_at FROM tasks;
+      INSERT INTO tasks_new (id, swarm_id, agent_id, required_job, parent_id, complexity, mcp_servers, project_context, description, status, retries, result, error, created_at, updated_at)
+      SELECT id, swarm_id, agent_id, required_job, parent_id, complexity, mcp_servers, project_context, description, status, retries, result, error, created_at, updated_at FROM tasks;
       DROP TABLE tasks;
       ALTER TABLE tasks_new RENAME TO tasks;
       

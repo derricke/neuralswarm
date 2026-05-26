@@ -9,6 +9,7 @@ import { isProviderAvailable, resolveDefaultProviderModel } from '../agents/prov
 export type DispatchResult =
   | { action: 'route'; jobId: string; complexity?: 'low' | 'high' }
   | { action: 'breakdown' }
+  | { action: 'execute'; context?: string; mcpServers?: string[] }
   | { action: 'fallback' };
 
 function getDispatcherConfig(): AgentConfig {
@@ -80,6 +81,10 @@ If the agent needs to execute commands, read files, or interact with systems, yo
 IMPORTANT: The \`system_prompt\` MUST explicitly instruct the agent to execute its task autonomously using the provided tools. Tell the agent that it operates in a non-interactive environment, so it MUST NEVER ask questions or request user permission. It must make reasonable assumptions and execute immediately. Include relevant context from the MCP server configs (like allowed directory paths or shell commands) directly in the system_prompt so the agent knows its working directory and capabilities.
 { "action": "hire", "new_job_title": "<title>", "description": "<detailed role description>", "system_prompt": "<instructions for the agent>", "mcp_servers": ["<tool_id>"] }
 
+4. EXECUTE: If the task does not require a specialized, reusable job profile, but instead is a one-off task that can be executed immediately by a generic agent, choose this option.
+You MUST provide project management context to guide the agent, and you MUST specify ONLY the relevant tools from the AVAILABLE TOOLS list that are necessary for this specific task. Do not provide all tools unless required.
+{ "action": "execute", "project_context": "The user wants to create a Next.js project...", "mcp_servers": ["<tool_id>"] }
+
 Return ONLY the raw JSON object. Do not wrap in markdown tags like \`\`\`json.`;
 
   try {
@@ -113,6 +118,13 @@ Return ONLY the raw JSON object. Do not wrap in markdown tags like \`\`\`json.`;
         db.prepare("UPDATE tasks SET status = 'cancelled', result = 'Broken down into subtasks by Coordinator', updated_at = unixepoch() WHERE id = ?").run(taskId);
       })();
       return { action: 'breakdown' };
+    }
+    
+    if (decision.action === 'execute') {
+      const mcpServers = Array.isArray(decision.mcp_servers) ? decision.mcp_servers : [];
+      const context = decision.project_context || '';
+      db.prepare('UPDATE tasks SET mcp_servers = ?, project_context = ?, updated_at = unixepoch() WHERE id = ?').run(JSON.stringify(mcpServers), context, taskId);
+      return { action: 'execute', context, mcpServers };
     }
     
     if (decision.action === 'hire' && decision.new_job_title && decision.system_prompt) {
