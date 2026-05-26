@@ -36,12 +36,13 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
     ],
   };
 });
+const workspaceDir = process.argv[2] || process.cwd();
 
 server.setRequestHandler(CallToolRequestSchema, async (request) => {
   if (request.params.name === 'execute_command') {
     const args = request.params.arguments as any;
     const command = args.command;
-    const cwd = args.cwd || process.cwd();
+    const cwd = args.cwd || workspaceDir;
 
     try {
       const { stdout, stderr } = await execAsync(command, { cwd });

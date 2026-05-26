@@ -192,14 +192,22 @@ function resolveMcpServersForWorkspace(
 
   return rawMcpServers.map((server) => {
     const pkgIndex = server.args.findIndex((arg) => arg.includes('@modelcontextprotocol/server-filesystem'));
-    if (pkgIndex === -1) {
-      return server;
+    if (pkgIndex !== -1) {
+      return {
+        ...server,
+        args: [...server.args.slice(0, pkgIndex + 1), workspaceDir],
+      };
     }
 
-    return {
-      ...server,
-      args: [...server.args.slice(0, pkgIndex + 1), workspaceDir],
-    };
+    const isShellServer = server.args.findIndex((arg) => arg.includes('shellMcp.ts')) !== -1;
+    if (isShellServer) {
+      return {
+        ...server,
+        args: [...server.args, workspaceDir],
+      };
+    }
+
+    return server;
   });
 }
 
