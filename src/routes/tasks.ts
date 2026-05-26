@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { getDb } from '../lib/db';
 import { parseTaskInput } from '../lib/taskParser';
 import { trajectoryEmitter } from '../coordinator/emitter';
+import { startSwarm } from '../coordinator';
 
 export const tasksRouter = Router();
 
@@ -131,6 +132,38 @@ tasksRouter.put('/:id/assign', (req: Request, res: Response) => {
 
   const task = db.prepare('SELECT * FROM tasks WHERE id = ?').get(req.params.id);
   res.json(task);
+});
+
+// POST /tasks/:id/retry — retry a specific task
+tasksRouter.post('/:id/retry', async (req: Request, res: Response) => {
+  const db = getDb();
+  const task = db.prepare('SELECT * FROM tasks WHERE id = ?').get(req.params.id) as any;
+
+  if (!task) {
+    res.status(404).json({ error: 'not_found' });
+    return;
+  }
+
+  if (task.status === 'pending' || task.status === 'running') {
+    res.status(400).json({ error: 'task_already_active' });
+    return;
+  }
+
+  db.prepare(`
+    UPDATE tasks 
+    SET status = 'pending', retries = 0, result = null, error = null, updated_at = unixepoch() 
+    WHERE id = ?
+  `).run(task.id);
+
+  if (task.swarm_id) {
+    // Fire and forget
+    startSwarm(task.swarm_id).catch(err => {
+      console.error('Failed to start swarm after task retry:', err);
+    });
+  }
+
+  const updated = db.prepare('SELECT * FROM tasks WHERE id = ?').get(task.id);
+  res.json(updated);
 });
 
 // GET /tasks/:id — includes full trajectory history

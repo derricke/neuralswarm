@@ -371,6 +371,21 @@ export default function SwarmControlPage() {
     }
   }
 
+  async function retryTask(taskId: string) {
+    if (!activeSwarmId) return;
+    setBusy(true);
+    setTasksMessage('');
+    try {
+      await fetchJson(`/tasks/${taskId}/retry`, { method: 'POST' });
+      const data = await fetchJson<TaskRow[]>(`/tasks?swarm_id=${activeSwarmId}`);
+      setTasks(data);
+    } catch (err) {
+      setTasksMessage(err instanceof Error ? err.message : 'Failed to retry task');
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function saveWorkspaceDir() {
     if (!activeSwarmId) {
       setWorkspaceMessage('Select a swarm first');
@@ -629,6 +644,7 @@ export default function SwarmControlPage() {
                   <tr>
                     <th>Description</th>
                     <th>Status</th>
+                    <th>Actions</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -652,6 +668,19 @@ export default function SwarmControlPage() {
                       </td>
                       <td>
                         <span className={statusClass(task.status)}>{task.status}</span>
+                      </td>
+                      <td>
+                        {(task.status.toLowerCase() === 'completed' || task.status.toLowerCase() === 'failed' || task.status.toLowerCase() === 'cancelled') && (
+                          <button
+                            type="button"
+                            className="button buttonGhost"
+                            style={{ padding: '0.42rem 0.7rem', fontSize: '0.78rem' }}
+                            onClick={() => retryTask(task.id)}
+                            disabled={busy}
+                          >
+                            Retry
+                          </button>
+                        )}
                       </td>
                     </tr>
                   ))}

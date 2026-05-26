@@ -79,10 +79,15 @@ export async function executeMcpTool(
   }
 
   try {
-    const result = await client.callTool({
-      name: toolName,
-      arguments: args,
-    });
+    const { CallToolResultSchema } = await import('@modelcontextprotocol/sdk/types.js');
+    const result = await client.callTool(
+      {
+        name: toolName,
+        arguments: args,
+      },
+      CallToolResultSchema,
+      { timeout: 300000 } // 5 minutes
+    );
     return result;
   } catch (err) {
     logger.error({ server: serverName, tool: toolName, error: err }, 'MCP tool execution failed');

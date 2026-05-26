@@ -14,7 +14,6 @@ function getMaxToolTurns(): number {
   return raw;
 }
 
-// Helper to recursively uppercase the "type" property for Gemini compatibility
 function fixSchemaForGemini(schema: any): any {
   if (!schema || typeof schema !== 'object') return schema;
   if (Array.isArray(schema)) return schema.map(fixSchemaForGemini);
@@ -27,6 +26,11 @@ function fixSchemaForGemini(schema: any): any {
       result[key] = fixSchemaForGemini(value);
     }
   }
+
+  if (result.type === 'OBJECT' && !result.properties) {
+    result.properties = {};
+  }
+
   return result;
 }
 

@@ -55,11 +55,16 @@ export async function dispatchTask(taskId: string): Promise<DispatchResult> {
 
   const config = getDispatcherConfig();
 
+  const allMcpServers = db.prepare('SELECT id, name FROM mcp_servers').all() as Array<{ id: string; name: string }>;
+
   const systemPrompt = `You are the AI Coordinator Dispatcher for a multi-agent system.
 Your job is to analyze the incoming task and decide how to handle it. You MUST output your decision as a strict JSON object.
 
 AVAILABLE JOBS IN THE SWARM:
 ${jobs.length === 0 ? "None" : jobs.map(j => `- ID: ${j.id}\n  Title: ${j.title}\n  Description: ${j.description || 'No description'}`).join('\n\n')}
+
+AVAILABLE TOOLS (MCP SERVERS):
+${allMcpServers.length === 0 ? "None" : allMcpServers.map(m => `- ID: ${m.id} (${m.name})`).join('\n')}
 
 DECISION TYPES (Choose exactly one):
 
@@ -71,7 +76,8 @@ You MUST also grade the task's complexity ("low" or "high"). Mark it "low" if it
 { "action": "breakdown", "subtasks": ["subtask 1 description", "subtask 2 description"] }
 
 3. HIRE: If the task requires a single specific capability that does NOT exist in the Available Jobs, create a new job profile to hire a new agent.
-{ "action": "hire", "new_job_title": "<title>", "description": "<detailed role description>", "system_prompt": "<instructions for the agent>" }
+If the agent needs to execute commands, read files, or interact with systems, you MUST assign it the relevant tool IDs from the AVAILABLE TOOLS list.
+{ "action": "hire", "new_job_title": "<title>", "description": "<detailed role description>", "system_prompt": "<instructions for the agent>", "mcp_servers": ["<tool_id>"] }
 
 Return ONLY the raw JSON object. Do not wrap in markdown tags like \`\`\`json.`;
 
@@ -109,12 +115,15 @@ Return ONLY the raw JSON object. Do not wrap in markdown tags like \`\`\`json.`;
     }
     
     if (decision.action === 'hire' && decision.new_job_title && decision.system_prompt) {
+      const mcpServers = Array.isArray(decision.mcp_servers) ? decision.mcp_servers : [];
+
       const newJob = await createRole(task.swarm_id, {
         title: decision.new_job_title,
         description: decision.description || decision.new_job_title,
         provider: config.provider,
         model: config.model,
-        system_prompt: decision.system_prompt
+        system_prompt: decision.system_prompt,
+        mcpServers: mcpServers as any
       });
 
       const hiredAgentId = randomUUID();
