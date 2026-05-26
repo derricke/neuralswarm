@@ -29,6 +29,8 @@ type TaskRow = {
   description: string;
   status: string;
   created_at: string;
+  agent_provider?: string;
+  agent_model?: string;
 };
 
 type LearningResponse = {
@@ -310,6 +312,13 @@ export async function Dashboard() {
                         </td>
                         <td>
                           <span className={statusClass(task.status)}>{task.status}</span>
+                          {(task.agent_provider || task.agent_model) && (
+                            <div style={{ marginTop: '0.4rem', fontSize: '0.75rem', opacity: 0.8, display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+                              <span className="chip" style={{ padding: '0.1rem 0.4rem', fontSize: '0.7rem' }}>
+                                {task.agent_provider} / {task.agent_model}
+                              </span>
+                            </div>
+                          )}
                         </td>
                       </tr>
                     ))}

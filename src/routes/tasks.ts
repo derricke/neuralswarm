@@ -243,19 +243,39 @@ tasksRouter.get('/', (req: Request, res: Response) => {
       db.prepare('SELECT COUNT(*) as count FROM tasks WHERE swarm_id IS NULL').get() as { count: number }
     ).count;
     tasks = db
-      .prepare('SELECT * FROM tasks WHERE swarm_id IS NULL ORDER BY created_at DESC LIMIT ? OFFSET ?')
+      .prepare(`
+        SELECT t.*, a.provider as agent_provider, a.model as agent_model
+        FROM tasks t
+        LEFT JOIN agents a ON t.agent_id = a.id
+        WHERE t.swarm_id IS NULL
+        ORDER BY t.created_at DESC
+        LIMIT ? OFFSET ?
+      `)
       .all(limit, offset);
   } else if (swarmId) {
     total = (
       db.prepare('SELECT COUNT(*) as count FROM tasks WHERE swarm_id = ?').get(swarmId) as { count: number }
     ).count;
     tasks = db
-      .prepare('SELECT * FROM tasks WHERE swarm_id = ? ORDER BY created_at DESC LIMIT ? OFFSET ?')
+      .prepare(`
+        SELECT t.*, a.provider as agent_provider, a.model as agent_model
+        FROM tasks t
+        LEFT JOIN agents a ON t.agent_id = a.id
+        WHERE t.swarm_id = ?
+        ORDER BY t.created_at DESC
+        LIMIT ? OFFSET ?
+      `)
       .all(swarmId, limit, offset);
   } else {
     total = (db.prepare('SELECT COUNT(*) as count FROM tasks').get() as { count: number }).count;
     tasks = db
-      .prepare('SELECT * FROM tasks ORDER BY created_at DESC LIMIT ? OFFSET ?')
+      .prepare(`
+        SELECT t.*, a.provider as agent_provider, a.model as agent_model
+        FROM tasks t
+        LEFT JOIN agents a ON t.agent_id = a.id
+        ORDER BY t.created_at DESC
+        LIMIT ? OFFSET ?
+      `)
       .all(limit, offset);
   }
 
