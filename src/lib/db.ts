@@ -55,7 +55,39 @@ export function resetDb(): void {
 }
 
 export function initDb(): void {
-  getDb();
+  const db = getDb();
+
+  // Cleanup any tasks/agents that were left in a running state due to a server crash or restart
+  try {
+    const tasksResult = db.prepare(`
+      UPDATE tasks 
+      SET status = 'failed', error = 'Task was interrupted because the server restarted or crashed mid-execution.', updated_at = unixepoch()
+      WHERE status = 'running'
+    `).run();
+    if (tasksResult.changes > 0) {
+      logger.warn({ count: tasksResult.changes }, 'cleaned up zombie tasks on startup');
+    }
+
+    const agentsResult = db.prepare(`
+      UPDATE agents 
+      SET status = 'idle', updated_at = unixepoch()
+      WHERE status = 'busy'
+    `).run();
+    if (agentsResult.changes > 0) {
+      logger.warn({ count: agentsResult.changes }, 'reset busy agents to idle on startup');
+    }
+
+    const swarmsResult = db.prepare(`
+      UPDATE swarms 
+      SET status = 'idle', updated_at = unixepoch()
+      WHERE status = 'running'
+    `).run();
+    if (swarmsResult.changes > 0) {
+      logger.warn({ count: swarmsResult.changes }, 'reset running swarms to idle on startup');
+    }
+  } catch (error) {
+    logger.error({ error: error instanceof Error ? error.message : String(error) }, 'failed to cleanup zombie state on startup');
+  }
 }
 
 function runMigrations(db: Database.Database) {

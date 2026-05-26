@@ -51,9 +51,10 @@ export async function runGoogleAgent(
     
     if (mcpTools.length > 0) {
       const functionDeclarations = mcpTools.map(t => {
-        mcpToolMap.set(t.name, t);
+        const safeName = t.name.replace(/[^a-zA-Z0-9_]/g, '_');
+        mcpToolMap.set(safeName, t);
         return {
-          name: t.name,
+          name: safeName,
           description: t.description || '',
           parameters: fixSchemaForGemini(t.input_schema) || { type: 'OBJECT', properties: {} }
         };
@@ -160,7 +161,11 @@ export async function runGoogleAgent(
             toolOutput = { error: 'Function call missing name' };
           } else {
             try {
-              const result = await executeMcpTool(mcpClients, call.name, call.args);
+              const mcpTool = mcpToolMap.get(call.name);
+              if (!mcpTool) {
+                throw new Error(`Tool ${call.name} not found in map`);
+              }
+              const result = await executeMcpTool(mcpClients, mcpTool.name, call.args);
               
               if (result && result.content && Array.isArray(result.content)) {
                 toolOutput = { result: result.content.map((c: any) => c.text || JSON.stringify(c)).join('\n') };

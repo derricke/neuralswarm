@@ -289,7 +289,11 @@ export async function runTask(taskId: string): Promise<void> {
         }
       } catch (e) {}
 
-      let baseAutonomousPrompt = `You are an autonomous AI agent in a non-interactive swarm framework. You MUST execute the user's task using the provided tools. NEVER ask for permission, NEVER ask clarifying questions, and NEVER wait for user input. Make reasonable assumptions to complete the task fully. If you need to create a project, just do it with default names if not specified. IMPORTANT: First use directory listing or search tools to explore the workspace and find relevant files before modifying them!${topLevelFiles}`;
+      let baseAutonomousPrompt = `You are an autonomous AI agent in a non-interactive swarm framework. 
+You MUST execute the user's task using the provided function calling capabilities (tools). 
+CRITICAL: Do NOT hallucinate tool executions (e.g. do not output <execute_bash> tags or markdown code blocks expecting them to run). You MUST use the native tool calling schema provided to you via the API.
+NEVER ask for permission, NEVER ask clarifying questions, and NEVER wait for user input. Make reasonable assumptions to complete the task fully. If you need to create a project, just do it with default names if not specified.
+IMPORTANT: First use directory listing or search tools to explore the workspace and find relevant files before modifying them!${topLevelFiles}`;
       
       if (task.project_context) {
         baseAutonomousPrompt += `\\n\\nPROJECT MANAGEMENT CONTEXT:\\n${task.project_context}`;
