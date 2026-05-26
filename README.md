@@ -8,7 +8,7 @@ NeuralSwarm is a Node.js service that orchestrates multiple LLM agents, routes t
 
 - **Multi-provider support**: Anthropic (Claude), OpenAI (GPT), Google (Gemini), OpenAI-compatible endpoints (for example OpenRouter), Ollama (local)
 - **Health monitoring**: Automatic agent firing on failure thresholds + provider blacklisting
-- **Learning engine**: HNSW-backed trajectory similarity search for intelligent routing
+- **Learning Engine**: Qdrant-backed trajectory similarity search for intelligent routing
 - **Task orchestration**: Parse plain text, TODO lists, or headings into tasks and queue them
 - **Observability**: Structured logging, system metrics, trajectory tracking
 - **Web dashboard**: Real-time swarm status, task submission, and recommendation insights
@@ -80,10 +80,10 @@ npm --prefix web run dev
 
 ### Run with Docker
 
-NeuralSwarm provides a multi-stage `Dockerfile` and a `docker-compose.yml` for easy deployment. It automatically handles native bindings (SQLite, HNSW) and persistent volume mounts.
+NeuralSwarm uses Qdrant as its vector database for the Learning Engine. A `docker-compose.yml` is provided to easily spin up Qdrant locally with persistent volumes.
 
-1. Ensure your `.env` file is created with your API keys.
-2. Run the services in the background:
+1. Ensure your `.env` file is created with your API keys. By default, NeuralSwarm connects to Qdrant at `http://localhost:6333`.
+2. Start the Qdrant service in the background:
 ```bash
 docker-compose up -d
 ```
@@ -109,7 +109,7 @@ Run this command on the backend host. Copy the returned `key` value and paste it
 
 - **Coordinator**: Poll-based task dispatcher; selects agents based on health + learning recommendations
 - **Health Monitor**: Tracks per-agent metrics; fires agents on >50% failure rate, 3+ consecutive failures, or error patterns
-- **Learning Engine**: HNSW-backed similarity search; recommends best provider/model for each task
+- **Learning Engine**: Qdrant vector database similarity search; recommends best provider/model for each task
 - **Memory Store**: SQLite backend with WAL mode; stores trajectories, embeddings, and audit trails
 - **Scheduler**: Background job for trajectory cleanup (archival >30d, deletion >90d)
 
@@ -291,9 +291,9 @@ npm --prefix web run typecheck
 
 The coordinator recovers task state from the database on restart. No in-memory queue means horizontal scaling is possible (future work).
 
-### HNSW Over Vector Databases
+### Qdrant Vector Database
 
-Embedded HNSW (`hnswlib-node`) avoids operational overhead of Postgres/Pinecone. Trajectories are indexed in-memory on startup; suitable for MVP.
+NeuralSwarm uses Qdrant for storing and querying trajectory embeddings. It offers a lightweight, high-performance vector search without the operational overhead of heavy databases. Trajectories are automatically synchronized from SQLite to Qdrant on startup.
 
 ### SQLite Over Postgres
 
@@ -339,7 +339,7 @@ See `Dockerfile` and `docker-compose.yml` for containerized deployment. The SQLi
 
 - ✓ Multi-provider agent spawning
 - ✓ Health monitoring + provider blacklisting
-- ✓ HNSW-backed learning engine
+- ✓ Qdrant-backed learning engine
 - ✓ REST API for all operations
 - ✓ Web dashboard + forms
 - ✓ Background cleanup scheduler
