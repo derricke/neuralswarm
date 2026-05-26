@@ -271,25 +271,30 @@ export default function SwarmControlPage() {
     };
   }, [activeSwarmId]);
 
-  async function loadJobs() {
+  useEffect(() => {
     if (!activeSwarmId) {
-      setJobsMessage('Enter a valid swarm ID or exact swarm name first');
+      setJobs([]);
       return;
     }
 
-    setBusy(true);
-    setJobsMessage('');
+    let mounted = true;
+    fetchJson<{ jobs: JobRow[] }>(`/swarms/${activeSwarmId}/roles`)
+      .then((data) => {
+        if (mounted) {
+          setJobs(data.jobs);
+          setJobsMessage('');
+        }
+      })
+      .catch((err) => {
+        if (mounted) {
+          setJobsMessage(err instanceof Error ? err.message : 'Failed to load roles');
+        }
+      });
 
-    try {
-      const result = await fetchJson<{ jobs: JobRow[] }>(`/swarms/${activeSwarmId}/roles`);
-      setJobs(result.jobs);
-      setJobsMessage(`Loaded ${result.jobs.length} job(s)`);
-    } catch (err) {
-      setJobsMessage(err instanceof Error ? err.message : 'Failed to load jobs');
-    } finally {
-      setBusy(false);
-    }
-  }
+    return () => {
+      mounted = false;
+    };
+  }, [activeSwarmId]);
 
   async function submitTasks(e: React.FormEvent) {
     e.preventDefault();
@@ -537,9 +542,6 @@ export default function SwarmControlPage() {
               ) : null}
             </div>
             <div className="actions" style={{ marginTop: '1rem' }}>
-              <button type="button" className="button" onClick={loadJobs} disabled={busy || !canAct}>
-                Load roles
-              </button>
               <button type="button" className="button buttonPrimary" onClick={startSwarm} disabled={busy || !canAct}>
                 Start swarm
               </button>
