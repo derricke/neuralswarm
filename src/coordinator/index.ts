@@ -633,7 +633,7 @@ function getCheapModel(provider: AgentProvider): string {
     case 'openai': return 'gpt-4o-mini';
     case 'openai_compatible': return process.env.OPENAI_COMPATIBLE_DEFAULT_CHEAP_MODEL?.trim() || 'gpt-4o-mini';
     case 'anthropic': return 'claude-3-5-haiku-latest';
-    case 'google': return 'gemini-2.5-flash';
+    case 'google': return 'gemini-3.1-flash-lite';
     case 'ollama': return 'llama3';
   }
 }

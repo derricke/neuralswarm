@@ -37,7 +37,7 @@ export function isProviderAvailable(provider: AgentProvider): boolean {
 
 export function resolveDefaultProviderModel(): { provider: AgentProvider; model: string } {
   if (process.env.GOOGLE_API_KEY?.trim()) {
-    return { provider: 'google', model: 'gemini-2.5-flash' };
+    return { provider: 'google', model: 'gemini-3.1-flash-lite' };
   }
 
   if (process.env.OPENAI_API_KEY?.trim()) {
