@@ -88,6 +88,7 @@ export async function runOpenAIAgent(
 
       let currentText = '';
       const toolCalls: Record<number, { id: string, name: string, arguments: string }> = {};
+      let finishReason: string | undefined;
 
       for await (const chunk of stream) {
         if (chunk.usage) {
@@ -95,7 +96,12 @@ export async function runOpenAIAgent(
           totalOutputTokens += chunk.usage.completion_tokens;
         }
 
-        const delta = chunk.choices[0]?.delta;
+        const choice = chunk.choices[0];
+        if (choice?.finish_reason) {
+          finishReason = choice.finish_reason;
+        }
+
+        const delta = choice?.delta;
         if (!delta) continue;
 
         if (delta.content) {
@@ -126,6 +132,13 @@ export async function runOpenAIAgent(
       } as any);
 
       if (tcArray.length === 0) {
+        if (finishReason === 'length') {
+          messages.push({
+            role: 'user',
+            content: `System: Your previous response was truncated because you exceeded the max token limit. Please continue your response exactly from where you left off, or summarize your progress.`,
+          });
+          continue;
+        }
         break; // No more tool calls, done
       }
 
@@ -145,7 +158,11 @@ export async function runOpenAIAgent(
             const mcpResult = await mcpManager.callTool(mcpTool._serverName, mcpTool.name, parsedArgs);
             resultStr = (mcpResult.content as any[]).map((c: any) => c.text).join('\n');
           } catch (e: any) {
-            resultStr = `Error executing tool: ${e.message}`;
+            if (finishReason === 'length') {
+              resultStr = `Error: Tool arguments truncated due to MAX_TOKENS limit. Your output was too large. Do NOT try to execute this exact same massive operation again. Instead, break your file modifications into smaller chunks, or use the shell server (e.g., sed, echo >>) to apply targeted edits to avoid hitting the token limit.`;
+            } else {
+              resultStr = `Error executing tool: ${e.message}`;
+            }
           }
         }
 

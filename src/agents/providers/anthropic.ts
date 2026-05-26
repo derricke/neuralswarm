@@ -115,6 +115,30 @@ export async function runAnthropicAgent(
         break;
       }
 
+      if (response.stop_reason === 'max_tokens') {
+        const toolUseBlocks = response.content.filter(b => b.type === 'tool_use');
+        
+        if (toolUseBlocks.length > 0) {
+          const toolResults: Anthropic.ToolResultBlockParam[] = toolUseBlocks.map(block => ({
+            type: 'tool_result',
+            tool_use_id: block.id,
+            content: `Error: Tool arguments truncated due to MAX_TOKENS limit. Your output was too large. Do NOT try to execute this exact same massive operation again. Instead, break your file modifications into smaller chunks, or use the shell server (e.g., sed, echo >>) to apply targeted edits to avoid hitting the token limit.`,
+            is_error: true,
+          }));
+          messages.push({
+            role: 'user',
+            content: toolResults,
+          });
+          continue;
+        } else {
+          messages.push({
+            role: 'user',
+            content: `System: Your previous response was truncated because you exceeded the max token limit. Please continue your response exactly from where you left off, or summarize your progress.`,
+          });
+          continue;
+        }
+      }
+
       throw new Error(`Anthropic API unexpectedly stopped: ${response.stop_reason}`);
     }
 

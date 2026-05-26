@@ -116,6 +116,7 @@ export async function runGoogleAgent(
 
       const candidate = response.candidates[0];
       const parts = candidate.content?.parts ?? [];
+      const finishReason = candidate.finishReason;
       
       // Append model response to history
       contents.push({ role: 'model', parts });
@@ -167,7 +168,11 @@ export async function runGoogleAgent(
                 toolOutput = { result: typeof result === 'string' ? result : JSON.stringify(result) };
               }
             } catch (err) {
-              toolOutput = { error: err instanceof Error ? err.message : String(err) };
+              if (finishReason === 'MAX_TOKENS') {
+                toolOutput = { error: 'Error: Tool arguments truncated due to MAX_TOKENS limit. Your output was too large. Do NOT try to execute this exact same massive operation again. Instead, break your file modifications into smaller chunks, or use the shell server (e.g., sed, echo >>) to apply targeted edits to avoid hitting the token limit.' };
+              } else {
+                toolOutput = { error: err instanceof Error ? err.message : String(err) };
+              }
             }
           }
 
@@ -185,9 +190,15 @@ export async function runGoogleAgent(
 
         contents.push({ role: 'user', parts: functionResponses });
         continue;
+      } else if (finishReason === 'MAX_TOKENS') {
+        contents.push({ 
+          role: 'user', 
+          parts: [{ text: 'System: Your previous response was truncated because you exceeded the max token limit. Please continue your response exactly from where you left off, or summarize your progress.' }] 
+        });
+        continue;
       }
 
-      // If no function calls, turn is done
+      // If no function calls and not truncated, turn is done
       break;
     }
 
