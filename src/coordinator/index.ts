@@ -166,10 +166,26 @@ function getSwarmWorkspaceDir(swarmId: string): string {
 
 function resolveMcpServersForWorkspace(
   swarmId: string,
-  rawMcpServers: AgentConfig['mcpServers']
+  serverIds?: string[]
 ): AgentConfig['mcpServers'] {
-  if (!rawMcpServers || rawMcpServers.length === 0) {
-    return rawMcpServers;
+  if (!serverIds || serverIds.length === 0) {
+    return [];
+  }
+
+  const db = getDb();
+  const rawMcpServers: NonNullable<AgentConfig['mcpServers']> = [];
+  for (const id of serverIds) {
+    const row = db.prepare('SELECT config FROM mcp_servers WHERE id = ?').get(id) as { config: string } | undefined;
+    if (row && row.config) {
+      try {
+        const configs = JSON.parse(row.config);
+        if (Array.isArray(configs)) {
+          rawMcpServers.push(...configs);
+        }
+      } catch (e) {
+        logger.error({ mcpServerId: id, error: e }, 'failed to parse mcp server config');
+      }
+    }
   }
 
   const workspaceDir = getSwarmWorkspaceDir(swarmId);
