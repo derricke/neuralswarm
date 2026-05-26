@@ -133,7 +133,7 @@ export async function Dashboard() {
               <a href="/swarm/create" className="chip">Create swarm</a>
               <a href="/role/create" className="chip">Add roles</a>
               <a href="/swarm" className="chip">Control swarm</a>
-              <a href="/task/upload" className="chip">Add Tasks</a>
+              <a href="/task/create" className="chip">Create Task</a>
             </div>
           </div>
 
@@ -327,7 +327,7 @@ export async function Dashboard() {
               ) : (
                 <div className="emptyState">
                   No tasks submitted yet.{' '}
-                  <a href="/task/upload" style={{ color: 'var(--accent)', textDecoration: 'underline' }}>
+                  <a href="/task/create" style={{ color: 'var(--accent)', textDecoration: 'underline' }}>
                     Submit some
                   </a>
                   .

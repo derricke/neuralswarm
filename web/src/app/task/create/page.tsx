@@ -157,7 +157,7 @@ export default function TaskUploadPage() {
         <section className="hero">
           <div className="heroCard">
             <span className="kicker">Task intake</span>
-            <h1 className="heroTitle">Submit tasks to a swarm</h1>
+            <h1 className="heroTitle">Create Task</h1>
             <p className="heroCopy">
               Paste plain text, TODO items, or headings. Format examples:<br />
               <code style={{ fontSize: '0.9em', color: 'var(--muted)' }}>

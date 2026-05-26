@@ -48,7 +48,7 @@ export default function TaskListPage() {
               View recently submitted tasks across all swarms.
             </p>
             <div className="chipRow" style={{ marginTop: '1rem' }}>
-              <a href="/task/upload" className="chip">Upload tasks</a>
+              <a href="/task/create" className="chip">Create Task</a>
             </div>
           </div>
         </section>
@@ -100,8 +100,8 @@ export default function TaskListPage() {
           ) : (
             <div className="emptyState">
               No tasks yet.{' '}
-              <a href="/task/upload" style={{ color: 'var(--accent)', textDecoration: 'underline' }}>
-                Upload tasks
+              <a href="/task/create" style={{ color: 'var(--accent)', textDecoration: 'underline' }}>
+                Create Task
               </a>
               .
             </div>
