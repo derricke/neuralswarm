@@ -60,6 +60,14 @@ export function initDb(): void {
 
 function runMigrations(db: Database.Database) {
   db.exec(`
+    CREATE TABLE IF NOT EXISTS mcp_servers (
+      id          TEXT PRIMARY KEY,
+      name        TEXT NOT NULL,
+      config      TEXT NOT NULL DEFAULT '{}',
+      created_at  INTEGER NOT NULL DEFAULT (unixepoch()),
+      updated_at  INTEGER NOT NULL DEFAULT (unixepoch())
+    );
+
     CREATE TABLE IF NOT EXISTS swarms (
       id          TEXT PRIMARY KEY,
       name        TEXT NOT NULL,

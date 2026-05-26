@@ -8,6 +8,7 @@ const NAV_ITEMS = [
   { href: '/swarms/control', label: 'Swarms' },
   { href: '/roles/create', label: 'Roles' },
   { href: '/tasks/upload', label: 'Tasks' },
+  { href: '/mcp', label: 'MCP Servers' },
 ] as const;
 
 export function TopNav() {

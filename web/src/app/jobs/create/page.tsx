@@ -24,7 +24,8 @@ export default function CreateJobPage() {
   const [provider, setProvider] = useState('');
   const [model, setModel] = useState('');
   const [systemPrompt, setSystemPrompt] = useState('You are a coding specialist.');
-  const [mcpServersJson, setMcpServersJson] = useState('[\n  \n]');
+  const [availableMcpServers, setAvailableMcpServers] = useState<any[]>([]);
+  const [selectedMcpServers, setSelectedMcpServers] = useState<string[]>([]);
 
   const [jobs, setJobs] = useState<GlobalJob[]>([]);
   const [state, setState] = useState<SubmitState>('idle');
@@ -39,6 +40,10 @@ export default function CreateJobPage() {
     fetchJson<{ jobs: GlobalJob[] }>('/roles')
       .then((result) => setJobs(result.jobs))
       .catch(() => setJobs([]));
+
+    fetchJson<{ servers: any[] }>('/mcp-servers')
+      .then((result) => setAvailableMcpServers(result.servers))
+      .catch(() => setAvailableMcpServers([]));
   }, []);
 
   async function handleSave(e: React.FormEvent) {
@@ -53,20 +58,6 @@ export default function CreateJobPage() {
     setState('loading');
     setMessage('');
 
-    let mcpServers: any[] = [];
-    if (mcpServersJson.trim() && mcpServersJson.trim() !== '[\n  \n]') {
-      try {
-        mcpServers = JSON.parse(mcpServersJson);
-        if (!Array.isArray(mcpServers)) {
-          throw new Error('MCP servers must be a JSON array');
-        }
-      } catch (err) {
-        setMessage('Invalid MCP Servers JSON: ' + (err instanceof Error ? err.message : String(err)));
-        setState('error');
-        return;
-      }
-    }
-
     const payload = {
       title: title.trim(),
       description: description.trim(),
@@ -74,7 +65,7 @@ export default function CreateJobPage() {
       model: model.trim() || undefined,
       system_prompt: systemPrompt.trim(),
       recommendation_swarm_id: returnSwarmId || undefined,
-      mcp_servers: mcpServers,
+      mcp_servers: selectedMcpServers,
     };
 
     try {
@@ -87,7 +78,7 @@ export default function CreateJobPage() {
       setJobs(result.jobs);
       setMessage(`Saved global role "${payload.title}"`);
       setState('success');
-      setMcpServersJson('[\n  \n]');
+      setSelectedMcpServers([]);
     } catch (err) {
       setMessage(err instanceof Error ? err.message : 'Failed to save global role');
       setState('error');
@@ -146,16 +137,30 @@ export default function CreateJobPage() {
               <textarea id="job-prompt" value={systemPrompt} onChange={(e) => setSystemPrompt(e.target.value)} disabled={state === 'loading'} />
             </div>
             <div className="field">
-              <label htmlFor="job-mcp">MCP Servers (JSON)</label>
-              <textarea
-                id="job-mcp"
-                value={mcpServersJson}
-                onChange={(e) => setMcpServersJson(e.target.value)}
-                placeholder={'[\n  {\n    "name": "filesystem",\n    "command": "npx",\n    "args": ["-y", "@modelcontextprotocol/server-filesystem", "./"]\n  }\n]'}
-                disabled={state === 'loading'}
-                style={{ fontFamily: 'monospace', minHeight: '120px' }}
-              />
-              <div className="helper">Optional JSON array of MCP servers for this role.</div>
+              <label>MCP Servers</label>
+              {availableMcpServers.length > 0 ? (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', marginTop: '0.5rem' }}>
+                  {availableMcpServers.map((server) => (
+                    <label key={server.id} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontWeight: 'normal', cursor: 'pointer' }}>
+                      <input
+                        type="checkbox"
+                        checked={selectedMcpServers.includes(server.id)}
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            setSelectedMcpServers([...selectedMcpServers, server.id]);
+                          } else {
+                            setSelectedMcpServers(selectedMcpServers.filter(id => id !== server.id));
+                          }
+                        }}
+                        disabled={state === 'loading'}
+                      />
+                      {server.name}
+                    </label>
+                  ))}
+                </div>
+              ) : (
+                <div className="helper">No MCP servers available. <a href="/mcp">Create one first</a>.</div>
+              )}
             </div>
             <div className="actions">
               <button type="submit" className="button buttonPrimary" disabled={state === 'loading' || !canSave}>Save global role</button>

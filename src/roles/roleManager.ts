@@ -132,6 +132,25 @@ function baseRoleSelect(whereClause: string): string {
   `;
 }
 
+function parseMcpServers(mcpServersJson: string | null): any[] {
+  let parsed = JSON.parse(mcpServersJson || '[]');
+  if (parsed.length > 0 && typeof parsed[0] === 'string') {
+    const db = getDb();
+    const placeholders = parsed.map(() => '?').join(',');
+    const servers = db.prepare(`SELECT config FROM mcp_servers WHERE id IN (${placeholders})`).all(...parsed) as any[];
+    parsed = servers.flatMap(s => {
+      let config: any = [];
+      try {
+        config = typeof s.config === 'string' ? JSON.parse(s.config || '[]') : s.config;
+      } catch (e) {
+        config = [];
+      }
+      return Array.isArray(config) ? config : [config];
+    });
+  }
+  return parsed;
+}
+
 export async function createGlobalRole(input: CreateRoleInput): Promise<GlobalRole> {
   const db = getDb();
   const id = randomUUID();
@@ -175,7 +194,7 @@ export function listGlobalRoles(): GlobalRole[] {
     model: row.model,
     system_prompt: row.system_prompt,
     failure_patterns: JSON.parse(row.failure_patterns || '[]'),
-    mcpServers: JSON.parse(row.mcp_servers || '[]'),
+    mcpServers: parseMcpServers(row.mcp_servers),
     created_at: row.created_at,
     updated_at: row.updated_at,
   }));
@@ -195,7 +214,7 @@ export function getGlobalRoleById(globalRoleId: string): GlobalRole | null {
     model: row.model,
     system_prompt: row.system_prompt,
     failure_patterns: JSON.parse(row.failure_patterns || '[]'),
-    mcpServers: JSON.parse(row.mcp_servers || '[]'),
+    mcpServers: parseMcpServers(row.mcp_servers),
     created_at: row.created_at,
     updated_at: row.updated_at,
   };
@@ -376,7 +395,7 @@ function parseRoleRow(row: any): SwarmRole {
     model: row.model,
     system_prompt: row.system_prompt,
     failure_patterns: JSON.parse(row.failure_patterns || '[]'),
-    mcpServers: JSON.parse(row.mcp_servers || '[]'),
+    mcpServers: parseMcpServers(row.mcp_servers),
     tasks_assigned: Number(row.tasks_assigned ?? 0),
     tasks_completed: Number(row.tasks_completed ?? 0),
     tasks_failed: Number(row.tasks_failed ?? 0),

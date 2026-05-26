@@ -640,7 +640,7 @@ export default function SwarmControlPage() {
                           Created: {formatDate(task.created_at)}
                         </div>
                         {task.result && (
-                           <div style={{ marginTop: '0.5rem', padding: '0.75rem', background: 'var(--bg-subtle, #f3f4f6)', borderRadius: '4px', fontSize: '0.85rem', whiteSpace: 'pre-wrap', fontFamily: 'monospace', maxHeight: '200px', overflowY: 'auto' }}>
+                           <div style={{ marginTop: '0.5rem', padding: '0.75rem', background: '#000', borderRadius: '4px', fontSize: '0.85rem', whiteSpace: 'pre-wrap', fontFamily: 'monospace', maxHeight: '200px', overflowY: 'auto' }}>
                              {task.result}
                            </div>
                         )}
