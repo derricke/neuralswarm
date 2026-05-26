@@ -78,7 +78,7 @@ export async function runOpenAIAgent(
       turn++;
       const stream = await client.chat.completions.create({
         model: config.model,
-        max_tokens: config.maxTokens ?? 1024,
+        max_tokens: config.maxTokens,
         messages,
         tools,
         stream: true,

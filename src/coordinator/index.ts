@@ -335,7 +335,7 @@ export async function runTask(taskId: string): Promise<void> {
         }),
         systemPrompt,
         temperature: typeProfile.temperature,
-        maxTokens: typeProfile.top_k_tokens,
+        maxTokens: undefined, // Let the model provider use its maximum output token limit
         mcpServers: resolveMcpServersForWorkspace(task.swarm_id, mcpServerIds),
         onStreamChunk: (chunk, type) => {
           trajectoryEmitter.emit('chunk', { taskId, chunk, type });

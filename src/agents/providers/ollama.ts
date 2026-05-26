@@ -23,7 +23,7 @@ export async function runOllamaAgent(
       },
       { role: 'user', content: task },
     ],
-    options: { num_predict: config.maxTokens ?? 1024 },
+    options: { num_predict: config.maxTokens },
   };
 
   const res = await fetch(`${host}/api/chat`, {

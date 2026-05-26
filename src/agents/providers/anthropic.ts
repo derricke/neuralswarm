@@ -41,7 +41,7 @@ export async function runAnthropicAgent(
       turn++;
       const createOptions: Anthropic.MessageCreateParamsNonStreaming = {
         model: config.model,
-        max_tokens: config.maxTokens ?? 1024,
+        max_tokens: config.maxTokens ?? 8192,
         system: config.systemPrompt ?? 'You are a helpful assistant. Complete the task concisely.',
         messages,
         metadata: { user_id: 'neuralswarm-agent' },

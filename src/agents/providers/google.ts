@@ -82,7 +82,7 @@ export async function runGoogleAgent(
         config: {
           systemInstruction,
           tools: tools.length > 0 ? tools : undefined,
-          maxOutputTokens: config.maxTokens ?? 1024,
+          maxOutputTokens: config.maxTokens,
           safetySettings: [
             {
               category: HarmCategory.HARM_CATEGORY_HARASSMENT,
