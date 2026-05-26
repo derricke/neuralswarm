@@ -277,7 +277,17 @@ export async function runTask(taskId: string): Promise<void> {
       const job = agent.job_id ? getJobById(agent.job_id, task.swarm_id) : null;
       let systemPrompt = job?.system_prompt ?? typeProfile.best_system_prompt ?? undefined;
 
-      const baseAutonomousPrompt = "You are an autonomous AI agent in a non-interactive swarm framework. You MUST execute the user's task using the provided tools. NEVER ask for permission, NEVER ask clarifying questions, and NEVER wait for user input. Make reasonable assumptions to complete the task fully. If you need to create a project, just do it with default names if not specified.";
+      const workspaceDir = getSwarmWorkspaceDir(task.swarm_id);
+      let topLevelFiles = '';
+      try {
+        const fs = await import('fs');
+        if (fs.existsSync(workspaceDir)) {
+          const files = fs.readdirSync(workspaceDir).slice(0, 20);
+          topLevelFiles = `\\n\\nWorkspace Directory: ${workspaceDir}\\nTop-level Files: ${files.join(', ')}${files.length === 20 ? '...' : ''}`;
+        }
+      } catch (e) {}
+
+      const baseAutonomousPrompt = `You are an autonomous AI agent in a non-interactive swarm framework. You MUST execute the user's task using the provided tools. NEVER ask for permission, NEVER ask clarifying questions, and NEVER wait for user input. Make reasonable assumptions to complete the task fully. If you need to create a project, just do it with default names if not specified. IMPORTANT: First use directory listing or search tools to explore the workspace and find relevant files before modifying them!${topLevelFiles}`;
       systemPrompt = systemPrompt ? `${baseAutonomousPrompt}\\n\\n${systemPrompt}` : baseAutonomousPrompt;
 
       if (job?.failure_patterns) {
@@ -290,6 +300,13 @@ export async function runTask(taskId: string): Promise<void> {
             systemPrompt = systemPrompt + `\\n\\nCRITICAL WARNINGS (Learn from past failures in this role):\\n${patternsText}`;
           }
         } catch (e) {}
+      }
+
+      let mcpServerIds = job?.mcp_servers ? JSON.parse(job.mcp_servers) : undefined;
+      if (!mcpServerIds) {
+        // If no job or no specific servers, provide all servers as fallback
+        const allServers = db.prepare('SELECT id FROM mcp_servers').all() as Array<{ id: string }>;
+        mcpServerIds = allServers.map(s => s.id);
       }
 
       const config: AgentConfig = {
@@ -305,10 +322,7 @@ export async function runTask(taskId: string): Promise<void> {
         systemPrompt,
         temperature: typeProfile.temperature,
         maxTokens: typeProfile.top_k_tokens,
-        mcpServers: resolveMcpServersForWorkspace(
-          task.swarm_id,
-          job?.mcp_servers ? JSON.parse(job.mcp_servers) : undefined
-        ),
+        mcpServers: resolveMcpServersForWorkspace(task.swarm_id, mcpServerIds),
         onStreamChunk: (chunk, type) => {
           trajectoryEmitter.emit('chunk', { taskId, chunk, type });
         }
