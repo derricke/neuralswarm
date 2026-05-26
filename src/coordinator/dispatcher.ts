@@ -55,7 +55,7 @@ export async function dispatchTask(taskId: string): Promise<DispatchResult> {
 
   const config = getDispatcherConfig();
 
-  const allMcpServers = db.prepare('SELECT id, name FROM mcp_servers').all() as Array<{ id: string; name: string }>;
+  const allMcpServers = db.prepare('SELECT id, name, config FROM mcp_servers').all() as Array<{ id: string; name: string; config: string }>;
 
   const systemPrompt = `You are the AI Coordinator Dispatcher for a multi-agent system.
 Your job is to analyze the incoming task and decide how to handle it. You MUST output your decision as a strict JSON object.
@@ -64,7 +64,7 @@ AVAILABLE JOBS IN THE SWARM:
 ${jobs.length === 0 ? "None" : jobs.map(j => `- ID: ${j.id}\n  Title: ${j.title}\n  Description: ${j.description || 'No description'}`).join('\n\n')}
 
 AVAILABLE TOOLS (MCP SERVERS):
-${allMcpServers.length === 0 ? "None" : allMcpServers.map(m => `- ID: ${m.id} (${m.name})`).join('\n')}
+${allMcpServers.length === 0 ? "None" : allMcpServers.map(m => `- ID: ${m.id} (${m.name})\n  Config: ${m.config}`).join('\n')}
 
 DECISION TYPES (Choose exactly one):
 
@@ -77,6 +77,7 @@ You MUST also grade the task's complexity ("low" or "high"). Mark it "low" if it
 
 3. HIRE: If the task requires a single specific capability that does NOT exist in the Available Jobs, create a new job profile to hire a new agent.
 If the agent needs to execute commands, read files, or interact with systems, you MUST assign it the relevant tool IDs from the AVAILABLE TOOLS list.
+IMPORTANT: The \`system_prompt\` MUST explicitly instruct the agent to execute its task autonomously using the provided tools. Tell the agent that it operates in a non-interactive environment, so it MUST NEVER ask questions or request user permission. It must make reasonable assumptions and execute immediately. Include relevant context from the MCP server configs (like allowed directory paths or shell commands) directly in the system_prompt so the agent knows its working directory and capabilities.
 { "action": "hire", "new_job_title": "<title>", "description": "<detailed role description>", "system_prompt": "<instructions for the agent>", "mcp_servers": ["<tool_id>"] }
 
 Return ONLY the raw JSON object. Do not wrap in markdown tags like \`\`\`json.`;

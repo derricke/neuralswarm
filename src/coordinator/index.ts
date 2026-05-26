@@ -277,6 +277,9 @@ export async function runTask(taskId: string): Promise<void> {
       const job = agent.job_id ? getJobById(agent.job_id, task.swarm_id) : null;
       let systemPrompt = job?.system_prompt ?? typeProfile.best_system_prompt ?? undefined;
 
+      const baseAutonomousPrompt = "You are an autonomous AI agent in a non-interactive swarm framework. You MUST execute the user's task using the provided tools. NEVER ask for permission, NEVER ask clarifying questions, and NEVER wait for user input. Make reasonable assumptions to complete the task fully. If you need to create a project, just do it with default names if not specified.";
+      systemPrompt = systemPrompt ? `${baseAutonomousPrompt}\\n\\n${systemPrompt}` : baseAutonomousPrompt;
+
       if (job?.failure_patterns) {
         try {
           const patterns = JSON.parse(job.failure_patterns) as { taskType: string, error: string, count: number }[];
@@ -284,7 +287,7 @@ export async function runTask(taskId: string): Promise<void> {
             const patternsText = patterns
               .map(p => `- Previous failure when attempting task type '${p.taskType}': ${p.error} (occurred ${p.count} times)`)
               .join('\\n');
-            systemPrompt = (systemPrompt || '') + `\\n\\nCRITICAL WARNINGS (Learn from past failures in this role):\\n${patternsText}`;
+            systemPrompt = systemPrompt + `\\n\\nCRITICAL WARNINGS (Learn from past failures in this role):\\n${patternsText}`;
           }
         } catch (e) {}
       }
