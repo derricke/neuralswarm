@@ -52,6 +52,43 @@ mcpServersRouter.post('/', (req: Request, res: Response) => {
   }
 });
 
+mcpServersRouter.put('/:id', (req: Request, res: Response) => {
+  try {
+    const { name, config } = req.body;
+    if (!name || !config) {
+      return res.status(400).json({ error: 'name and config are required' });
+    }
+
+    const db = getDb();
+    const now = Math.floor(Date.now() / 1000);
+    const id = req.params.id;
+
+    const existing = db.prepare('SELECT id FROM mcp_servers WHERE id = ?').get(id);
+    if (!existing) {
+      return res.status(404).json({ error: 'MCP server not found' });
+    }
+
+    db.prepare(`
+      UPDATE mcp_servers SET name = ?, config = ?, updated_at = ?
+      WHERE id = ?
+    `).run(
+      name,
+      JSON.stringify(config),
+      now,
+      id
+    );
+
+    const server = db.prepare('SELECT * FROM mcp_servers WHERE id = ?').get(id) as any;
+    res.json({
+      ...server,
+      config: JSON.parse(server.config || '[]')
+    });
+  } catch (err) {
+    logger.error({ error: err }, 'PUT /mcp-servers/:id failed');
+    res.status(500).json({ error: 'Failed to update MCP server' });
+  }
+});
+
 mcpServersRouter.delete('/:id', (req: Request, res: Response) => {
   try {
     const db = getDb();
