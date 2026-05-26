@@ -12,13 +12,26 @@ interface McpServer {
 
 type SubmitState = 'idle' | 'loading' | 'success' | 'error';
 
+const EXAMPLE_JSON = `[
+  {
+    "name": "filesystem",
+    "command": "npx",
+    "args": ["-y", "@modelcontextprotocol/server-filesystem", "/home/derrick/Projects/neuralswarm/data/workspace"]
+  },
+  {
+    "name": "shell",
+    "command": "npx",
+    "args": ["ts-node", "src/scripts/shellMcp.ts"]
+  }
+]`;
+
 export default function McpServersPage() {
   const [servers, setServers] = useState<McpServer[]>([]);
   const [state, setState] = useState<SubmitState>('idle');
   const [message, setMessage] = useState('');
 
   const [name, setName] = useState('');
-  const [configJson, setConfigJson] = useState('[\n  \n]');
+  const [configJson, setConfigJson] = useState('');
 
   const fetchServers = async () => {
     try {
@@ -63,7 +76,7 @@ export default function McpServersPage() {
       setMessage(`Saved MCP server configuration "${name.trim()}"`);
       setState('success');
       setName('');
-      setConfigJson('[\n  \n]');
+      setConfigJson(EXAMPLE_JSON);
       fetchServers();
     } catch (err: any) {
       setMessage(err instanceof Error ? err.message : 'Failed to save server');
@@ -111,7 +124,7 @@ export default function McpServersPage() {
                 id="mcp-config"
                 value={configJson}
                 onChange={(e) => setConfigJson(e.target.value)}
-                placeholder={'[\n  {\n    "name": "filesystem",\n    "command": "npx",\n    "args": ["-y", "@modelcontextprotocol/server-filesystem", "./"]\n  }\n]'}
+                placeholder={EXAMPLE_JSON}
                 disabled={state === 'loading'}
                 style={{ fontFamily: 'monospace', minHeight: '120px' }}
               />

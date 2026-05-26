@@ -64,6 +64,46 @@ router.post(['/jobs', '/roles'], async (req: Request, res: Response) => {
 });
 
 /**
+ * PUT /jobs/:jobId
+ * Update a global job
+ */
+router.put(['/jobs/:jobId', '/roles/:jobId'], async (req: Request, res: Response) => {
+  try {
+    const jobId = String(req.params.jobId);
+    const {
+      title,
+      description,
+      required_capabilities,
+      provider,
+      model,
+      system_prompt,
+      mcp_servers,
+    } = req.body;
+
+    if (!title || !system_prompt) {
+      return res.status(400).json({
+        error: 'Missing required fields: title, system_prompt',
+      });
+    }
+
+    const job = await roleManager.updateGlobalRole(jobId, {
+      title,
+      description,
+      required_capabilities,
+      provider,
+      model,
+      system_prompt,
+      mcpServers: mcp_servers,
+    });
+
+    res.json(job);
+  } catch (err) {
+    logger.error({ error: err }, 'PUT /jobs/:id failed');
+    res.status(500).json({ error: 'Failed to update global job' });
+  }
+});
+
+/**
  * POST /swarms/:swarmId/agents
  * Hire an agent for a specific job
  */

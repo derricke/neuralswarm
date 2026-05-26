@@ -13,19 +13,21 @@ type GlobalJob = {
   provider: string;
   model: string;
   system_prompt: string;
+  mcpServers?: any[];
 };
 
 export default function CreateJobPage() {
   const searchParams = useSearchParams();
   const returnSwarmId = searchParams.get('swarmId')?.trim() ?? '';
 
-  const [title, setTitle] = useState('coder');
+  const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
-  const [provider, setProvider] = useState('');
-  const [model, setModel] = useState('');
-  const [systemPrompt, setSystemPrompt] = useState('You are a coding specialist.');
+  const [provider, setProvider] = useState('OpenAI');
+  const [model, setModel] = useState('gpt-4o');
+  const [systemPrompt, setSystemPrompt] = useState('You are a helpful agent.');
   const [availableMcpServers, setAvailableMcpServers] = useState<any[]>([]);
   const [selectedMcpServers, setSelectedMcpServers] = useState<string[]>([]);
+  const [editingRoleId, setEditingRoleId] = useState<string | null>(null);
 
   const [jobs, setJobs] = useState<GlobalJob[]>([]);
   const [state, setState] = useState<SubmitState>('idle');
@@ -46,6 +48,16 @@ export default function CreateJobPage() {
       .catch(() => setAvailableMcpServers([]));
   }, []);
 
+  async function handleDelete(id: string) {
+    if (!confirm('Are you sure you want to delete this role?')) return;
+    try {
+      await fetchJson(`/roles/${id}`, { method: 'DELETE' });
+      setJobs(jobs.filter(j => j.id !== id));
+    } catch (err) {
+      alert('Failed to delete role');
+    }
+  }
+
   async function handleSave(e: React.FormEvent) {
     e.preventDefault();
 
@@ -59,25 +71,34 @@ export default function CreateJobPage() {
     setMessage('');
 
     const payload = {
-      title: title.trim(),
-      description: description.trim(),
-      provider: provider.trim() || undefined,
-      model: model.trim() || undefined,
-      system_prompt: systemPrompt.trim(),
-      recommendation_swarm_id: returnSwarmId || undefined,
-      mcp_servers: selectedMcpServers,
+      title,
+      description,
+      provider,
+      model,
+      system_prompt: systemPrompt,
+      mcp_servers: selectedMcpServers.map(id => availableMcpServers.find(s => s.id === id)?.name).filter(Boolean)
     };
 
     try {
-      await fetchJson<GlobalJob>('/roles', {
-        method: 'POST',
-        body: JSON.stringify(payload),
-      });
+      if (editingRoleId) {
+        await fetchJson(`/roles/${editingRoleId}`, {
+          method: 'PUT',
+          body: JSON.stringify(payload),
+        });
+        setMessage('Global role updated successfully');
+        setEditingRoleId(null);
+      } else {
+        await fetchJson('/roles', {
+          method: 'POST',
+          body: JSON.stringify(payload),
+        });
+        setMessage('Global role created successfully');
+      }
 
       const result = await fetchJson<{ jobs: GlobalJob[] }>('/roles');
       setJobs(result.jobs);
-      setMessage(`Saved global role "${payload.title}"`);
       setState('success');
+      setTitle('');
       setSelectedMcpServers([]);
     } catch (err) {
       setMessage(err instanceof Error ? err.message : 'Failed to save global role');
@@ -100,7 +121,7 @@ export default function CreateJobPage() {
 
         <article className="formCard">
           <div className="sectionHeader">
-            <h2>New global role</h2>
+            <h2>{editingRoleId ? 'Edit global role' : 'New global role'}</h2>
             <span className="tag">form</span>
           </div>
           <form onSubmit={handleSave} className="stack">
@@ -163,7 +184,24 @@ export default function CreateJobPage() {
               )}
             </div>
             <div className="actions">
-              <button type="submit" className="button buttonPrimary" disabled={state === 'loading' || !canSave}>Save global role</button>
+              <button type="submit" className="button buttonPrimary" disabled={state === 'loading' || !canSave}>
+                {editingRoleId ? 'Update global role' : 'Save global role'}
+              </button>
+              {editingRoleId && (
+                <button
+                  type="button"
+                  className="button buttonSecondary"
+                  onClick={() => {
+                    setEditingRoleId(null);
+                    setTitle('');
+                    setDescription('');
+                    setSystemPrompt('');
+                    setSelectedMcpServers([]);
+                  }}
+                >
+                  Cancel
+                </button>
+              )}
               <a
                 className="button"
                 href={returnSwarmId ? `/swarms/manage-roles?swarmId=${encodeURIComponent(returnSwarmId)}` : '/swarms/manage-roles'}
@@ -187,6 +225,7 @@ export default function CreateJobPage() {
                   <th>Title</th>
                   <th>Provider</th>
                   <th>Model</th>
+                  <th style={{ width: '120px' }}>Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -195,6 +234,35 @@ export default function CreateJobPage() {
                     <td>{job.title}</td>
                     <td>{job.provider}</td>
                     <td>{job.model}</td>
+                    <td style={{ display: 'flex', gap: '8px' }}>
+                      <button
+                        className="button buttonSecondary"
+                        onClick={() => {
+                          setEditingRoleId(job.id);
+                          setTitle(job.title);
+                          setDescription(job.description || '');
+                          setProvider(job.provider || 'OpenAI');
+                          setModel(job.model || 'gpt-4o');
+                          setSystemPrompt(job.system_prompt);
+                          
+                          // Convert server names back to IDs for checkboxes
+                          const serverIds = (job.mcpServers || [])
+                            .map((s: any) => availableMcpServers.find(as => as.name === s.name)?.id)
+                            .filter(Boolean);
+                          setSelectedMcpServers(serverIds as string[]);
+                          
+                          window.scrollTo({ top: 0, behavior: 'smooth' });
+                        }}
+                      >
+                        Edit
+                      </button>
+                      <button
+                        className="button buttonDanger"
+                        onClick={() => handleDelete(job.id)}
+                      >
+                        Delete
+                      </button>
+                    </td>
                   </tr>
                 ))}
               </tbody>

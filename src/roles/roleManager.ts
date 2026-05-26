@@ -182,6 +182,57 @@ export async function createGlobalRole(input: CreateRoleInput): Promise<GlobalRo
   return getGlobalRoleById(id)!;
 }
 
+export async function updateGlobalRole(id: string, input: CreateRoleInput): Promise<GlobalRole> {
+  const db = getDb();
+  const now = Math.floor(Date.now() / 1000);
+  const defaults = resolveDefaultProviderModel();
+  const provider = input.provider?.trim() || defaults.provider;
+  const model = input.model?.trim() || defaults.model;
+
+  const existing = getGlobalRoleById(id);
+  if (!existing) {
+    throw new Error('Global role not found');
+  }
+
+  db.prepare(
+    `UPDATE global_jobs SET
+      title = ?, description = ?, required_capabilities = ?,
+      provider = ?, model = ?, system_prompt = ?, mcp_servers = ?, updated_at = ?
+     WHERE id = ?`
+  ).run(
+    input.title,
+    input.description || null,
+    JSON.stringify(input.required_capabilities || []),
+    provider,
+    model,
+    input.system_prompt,
+    JSON.stringify(input.mcpServers || []),
+    now,
+    id
+  );
+
+  // Sync basic info to swarm roles linked to this global role
+  db.prepare(
+    `UPDATE swarm_jobs SET
+      title = ?, description = ?, required_capabilities = ?,
+      provider = ?, model = ?, system_prompt = ?, mcp_servers = ?, updated_at = ?
+     WHERE COALESCE(global_role_id, global_job_id) = ?`
+  ).run(
+    input.title,
+    input.description || null,
+    JSON.stringify(input.required_capabilities || []),
+    provider,
+    model,
+    input.system_prompt,
+    JSON.stringify(input.mcpServers || []),
+    now,
+    id
+  );
+
+  logger.info({ globalRoleId: id, title: input.title }, 'global role updated');
+  return getGlobalRoleById(id)!;
+}
+
 export function listGlobalRoles(): GlobalRole[] {
   const db = getDb();
   const rows = db.prepare('SELECT * FROM global_jobs ORDER BY created_at DESC').all() as any[];
@@ -439,6 +490,7 @@ export type GlobalJob = GlobalRole;
 export type CreateJobInput = CreateRoleInput;
 
 export const createGlobalJob = createGlobalRole;
+export const updateGlobalJob = updateGlobalRole;
 export const listGlobalJobs = listGlobalRoles;
 export const getGlobalJobById = getGlobalRoleById;
 export const assignGlobalJobToSwarm = assignGlobalRoleToSwarm;
