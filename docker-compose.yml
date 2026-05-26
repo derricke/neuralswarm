@@ -1,23 +1,6 @@
 version: '3.8'
 services:
-  neuralswarm:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    container_name: neuralswarm-coordinator
-    ports:
-      - "3000:3000"
-    volumes:
-      - ./data:/app/data
-    env_file:
-      - .env
-    restart: unless-stopped
-    depends_on:
-      - qdrant
-    deploy:
-      resources:
-        limits:
-          memory: 1G
+
   qdrant:
     image: qdrant/qdrant:latest
     container_name: neuralswarm-memory

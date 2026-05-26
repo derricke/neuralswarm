@@ -2,7 +2,6 @@
 
 set -euo pipefail
 
-MODE="${1:-dev}"
 child_pid=""
 
 cleanup() {
@@ -21,11 +20,7 @@ cleanup() {
 
 trap cleanup EXIT INT TERM HUP
 
-if [[ "$MODE" == "hnsw" ]]; then
-  setsid nodemon --watch src --ext ts --exec ts-node src/index.ts &
-else
-  setsid env LEARNING_DISABLE_HNSW=1 nodemon --watch src --ext ts --exec ts-node src/index.ts &
-fi
-
+# Start in a dedicated process group so cleanup can terminate all descendants
+setsid nodemon --watch src --ext ts --exec ts-node src/index.ts &
 child_pid=$!
 wait "$child_pid"

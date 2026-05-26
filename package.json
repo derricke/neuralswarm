@@ -6,12 +6,7 @@
   "scripts": {
     "build": "tsc",
     "start": "node dist/index.js",
-    "// dev": "HNSW disabled by default for safety in WSL dev. Use dev:hnsw to test native index path.",
-    "dev": "bash scripts/dev-run.sh dev",
-    "dev:hnsw": "bash scripts/dev-run.sh hnsw",
-    "dev:winlog": "bash scripts/dev-winlog.sh",
-    "dev:hnsw:winlog": "bash scripts/dev-winlog.sh dev:hnsw",
-    "diag:capture": "bash scripts/capture-wsl-diagnostics.sh",
+    "dev": "bash scripts/dev.sh",
     "api-key:create": "ts-node src/scripts/createApiKey.ts",
     "db:reset:preserve-api-keys": "ts-node src/scripts/resetDbPreserveApiKeys.ts",
     "typecheck": "tsc --noEmit",
