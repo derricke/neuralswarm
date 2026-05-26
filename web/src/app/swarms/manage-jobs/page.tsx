@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { fetchJson } from '@/lib/api';
 
@@ -64,7 +64,15 @@ function resolveSwarmId(input: string, swarms: SwarmOption[]): string | null {
   return UUID_PATTERN.test(normalized) ? normalized : null;
 }
 
-export default function ManageJobsPage() {
+export default function ManageJobsPageWrapper() {
+  return (
+    <Suspense fallback={<div>Loading...</div>}>
+      <ManageJobsPage />
+    </Suspense>
+  );
+}
+
+function ManageJobsPage() {
   const searchParams = useSearchParams();
 
   const [swarmInput, setSwarmInput] = useState('');
@@ -422,7 +430,7 @@ export default function ManageJobsPage() {
               <option value="">Select a global role</option>
               {globalJobs.map((job) => (
                 <option key={job.id} value={job.id}>
-                  {job.title} ({job.provider}/{job.model})
+                  {job.title}
                 </option>
               ))}
             </select>
@@ -451,8 +459,6 @@ export default function ManageJobsPage() {
               <thead>
                 <tr>
                   <th>Title</th>
-                  <th>Provider</th>
-                  <th>Model</th>
                   <th>Agents</th>
                 </tr>
               </thead>
@@ -460,8 +466,6 @@ export default function ManageJobsPage() {
                 {jobs.map((job) => (
                   <tr key={job.id}>
                     <td>{job.title}</td>
-                    <td>{job.provider}</td>
-                    <td>{job.model}</td>
                     <td>{job.agents_count ?? 0}</td>
                   </tr>
                 ))}

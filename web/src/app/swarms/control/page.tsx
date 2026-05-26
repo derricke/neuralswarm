@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { fetchJson } from '@/lib/api';
 
@@ -92,7 +92,15 @@ function statusClass(status: string) {
   return 'status status-pending';
 }
 
-export default function SwarmControlPage() {
+export default function SwarmControlPageWrapper() {
+  return (
+    <Suspense fallback={<div>Loading...</div>}>
+      <SwarmControlPage />
+    </Suspense>
+  );
+}
+
+function SwarmControlPage() {
   const searchParams = useSearchParams();
   const [swarmInput, setSwarmInput] = useState('');
   const [selectedSwarmId, setSelectedSwarmId] = useState<string | null>(null);
@@ -611,8 +619,6 @@ export default function SwarmControlPage() {
                 <thead>
                   <tr>
                     <th>Title</th>
-                    <th>Provider</th>
-                    <th>Model</th>
                     <th>Agents</th>
                   </tr>
                 </thead>
@@ -620,8 +626,6 @@ export default function SwarmControlPage() {
                   {jobs.map((job) => (
                     <tr key={job.id}>
                       <td>{job.title}</td>
-                      <td>{job.provider}</td>
-                      <td>{job.model}</td>
                       <td>{job.agents_count ?? 0}</td>
                     </tr>
                   ))}
@@ -713,9 +717,7 @@ export default function SwarmControlPage() {
                 />
                 <datalist id="job-options">
                   {jobs.map((job) => (
-                    <option key={job.id} value={job.title}>
-                      {job.provider}/{job.model}
-                    </option>
+                    <option key={job.id} value={job.title} />
                   ))}
                 </datalist>
               </div>

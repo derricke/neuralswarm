@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { Suspense, useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { fetchJson } from '@/lib/api';
 
@@ -16,14 +16,20 @@ type GlobalJob = {
   mcpServers?: any[];
 };
 
-export default function CreateJobPage() {
+export default function CreateJobPageWrapper() {
+  return (
+    <Suspense fallback={<div>Loading...</div>}>
+      <CreateJobPage />
+    </Suspense>
+  );
+}
+
+function CreateJobPage() {
   const searchParams = useSearchParams();
   const returnSwarmId = searchParams.get('swarmId')?.trim() ?? '';
 
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
-  const [provider, setProvider] = useState('OpenAI');
-  const [model, setModel] = useState('gpt-4o');
   const [systemPrompt, setSystemPrompt] = useState('You are a helpful agent.');
   const [availableMcpServers, setAvailableMcpServers] = useState<any[]>([]);
   const [selectedMcpServers, setSelectedMcpServers] = useState<string[]>([]);
@@ -73,8 +79,8 @@ export default function CreateJobPage() {
     const payload = {
       title,
       description,
-      provider,
-      model,
+      provider: 'auto',
+      model: 'auto',
       system_prompt: systemPrompt,
       mcp_servers: selectedMcpServers.map(id => availableMcpServers.find(s => s.id === id)?.name).filter(Boolean)
     };
@@ -133,26 +139,7 @@ export default function CreateJobPage() {
               <label htmlFor="job-description">Description</label>
               <input id="job-description" value={description} onChange={(e) => setDescription(e.target.value)} disabled={state === 'loading'} />
             </div>
-            <div className="field">
-              <label htmlFor="job-provider">Provider</label>
-              <input
-                id="job-provider"
-                value={provider}
-                onChange={(e) => setProvider(e.target.value)}
-                placeholder="Auto-select from available keys (optional override)"
-                disabled={state === 'loading'}
-              />
-            </div>
-            <div className="field">
-              <label htmlFor="job-model">Model</label>
-              <input
-                id="job-model"
-                value={model}
-                onChange={(e) => setModel(e.target.value)}
-                placeholder="Auto-select default model (optional override)"
-                disabled={state === 'loading'}
-              />
-            </div>
+
             <div className="field">
               <label htmlFor="job-prompt">System prompt</label>
               <textarea id="job-prompt" value={systemPrompt} onChange={(e) => setSystemPrompt(e.target.value)} disabled={state === 'loading'} />
@@ -223,8 +210,6 @@ export default function CreateJobPage() {
               <thead>
                 <tr>
                   <th>Title</th>
-                  <th>Provider</th>
-                  <th>Model</th>
                   <th style={{ width: '120px' }}>Actions</th>
                 </tr>
               </thead>
@@ -232,8 +217,6 @@ export default function CreateJobPage() {
                 {jobs.map((job) => (
                   <tr key={job.id}>
                     <td>{job.title}</td>
-                    <td>{job.provider}</td>
-                    <td>{job.model}</td>
                     <td style={{ display: 'flex', gap: '8px' }}>
                       <button
                         className="button buttonSecondary"
@@ -241,8 +224,6 @@ export default function CreateJobPage() {
                           setEditingRoleId(job.id);
                           setTitle(job.title);
                           setDescription(job.description || '');
-                          setProvider(job.provider || 'OpenAI');
-                          setModel(job.model || 'gpt-4o');
                           setSystemPrompt(job.system_prompt);
                           
                           // Convert server names back to IDs for checkboxes
