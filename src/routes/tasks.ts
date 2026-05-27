@@ -244,9 +244,10 @@ tasksRouter.get('/', (req: Request, res: Response) => {
     ).count;
     tasks = db
       .prepare(`
-        SELECT t.*, a.provider as agent_provider, a.model as agent_model
+        SELECT t.*, a.provider as agent_provider, a.model as agent_model, s.name as swarm_name
         FROM tasks t
         LEFT JOIN agents a ON t.agent_id = a.id
+        LEFT JOIN swarms s ON t.swarm_id = s.id
         WHERE t.swarm_id IS NULL
         ORDER BY t.created_at DESC
         LIMIT ? OFFSET ?
@@ -258,9 +259,10 @@ tasksRouter.get('/', (req: Request, res: Response) => {
     ).count;
     tasks = db
       .prepare(`
-        SELECT t.*, a.provider as agent_provider, a.model as agent_model
+        SELECT t.*, a.provider as agent_provider, a.model as agent_model, s.name as swarm_name
         FROM tasks t
         LEFT JOIN agents a ON t.agent_id = a.id
+        LEFT JOIN swarms s ON t.swarm_id = s.id
         WHERE t.swarm_id = ?
         ORDER BY t.created_at DESC
         LIMIT ? OFFSET ?
@@ -270,9 +272,10 @@ tasksRouter.get('/', (req: Request, res: Response) => {
     total = (db.prepare('SELECT COUNT(*) as count FROM tasks').get() as { count: number }).count;
     tasks = db
       .prepare(`
-        SELECT t.*, a.provider as agent_provider, a.model as agent_model
+        SELECT t.*, a.provider as agent_provider, a.model as agent_model, s.name as swarm_name
         FROM tasks t
         LEFT JOIN agents a ON t.agent_id = a.id
+        LEFT JOIN swarms s ON t.swarm_id = s.id
         ORDER BY t.created_at DESC
         LIMIT ? OFFSET ?
       `)

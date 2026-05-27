@@ -386,6 +386,25 @@ function SwarmControlPage() {
     }
   }
 
+  async function removeRole(jobId: string) {
+    if (!activeSwarmId) return;
+    if (!confirm('Are you sure you want to remove this role from the swarm?')) return;
+    
+    setBusy(true);
+    setJobsMessage('');
+    try {
+      await fetchJson(`/swarms/${activeSwarmId}/roles/${jobId}`, {
+        method: 'DELETE',
+      });
+      const data = await fetchJson<{ jobs: JobRow[] }>(`/swarms/${activeSwarmId}/roles`);
+      setJobs(data.jobs);
+    } catch (err) {
+      setJobsMessage(err instanceof Error ? err.message : 'Failed to remove role');
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function retryTask(taskId: string) {
     if (!activeSwarmId) return;
     setBusy(true);
@@ -555,22 +574,6 @@ function SwarmControlPage() {
               <button type="button" className="button buttonPrimary" onClick={startSwarm} disabled={busy || !canAct}>
                 Start swarm
               </button>
-              <div className="chipRow">
-                <a
-                  href={canAct ? `/role/create?swarmId=${encodeURIComponent(activeSwarmIdValue)}` : '/role/create'}
-                  className="chip"
-                  onClick={(e) => { if (!canAct) e.preventDefault(); }}
-                >
-                  Create Role
-                </a>
-                <a
-                  href={canAct ? `/swarm/manage-roles?swarmId=${encodeURIComponent(activeSwarmIdValue)}` : '/swarm/manage-roles'}
-                  className="chip"
-                  onClick={(e) => { if (!canAct) e.preventDefault(); }}
-                >
-                  Assign Roles
-                </a>
-              </div>
               {canAct && (
                 <button type="button" className="button" style={{ borderColor: 'var(--status-failed)', color: 'var(--status-failed)' }} onClick={deleteSwarm} disabled={busy}>
                   Delete Swarm
@@ -617,8 +620,16 @@ function SwarmControlPage() {
 
           <article className="formCard">
             <div className="sectionHeader">
-              <h2>Current roles</h2>
-              <span className="tag">overview</span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                <h2>Current roles</h2>
+                <span className="tag">overview</span>
+              </div>
+              {canAct && (
+                <div className="chipRow">
+                  <a href={`/role/create?swarmId=${encodeURIComponent(activeSwarmIdValue)}`} className="chip">Create</a>
+                  <a href={`/swarm/manage-roles?swarmId=${encodeURIComponent(activeSwarmIdValue)}`} className="chip">Assign</a>
+                </div>
+              )}
             </div>
             {jobs.length > 0 ? (
               <table className="table">
@@ -626,6 +637,7 @@ function SwarmControlPage() {
                   <tr>
                     <th>Title</th>
                     <th>Agents</th>
+                    <th>Actions</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -633,6 +645,17 @@ function SwarmControlPage() {
                     <tr key={job.id}>
                       <td>{job.title}</td>
                       <td>{job.agents_count ?? 0}</td>
+                      <td>
+                        <button
+                          type="button"
+                          className="button buttonGhost"
+                          style={{ padding: '0.42rem 0.7rem', fontSize: '0.78rem', color: 'var(--status-failed, #dc2626)' }}
+                          onClick={() => removeRole(job.id)}
+                          disabled={busy}
+                        >
+                          Remove
+                        </button>
+                      </td>
                     </tr>
                   ))}
                 </tbody>

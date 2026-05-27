@@ -21,6 +21,7 @@ type AgentRow = {
   status: string;
   health_score: number;
   created_at: string;
+  role_title?: string;
 };
 
 type TaskRow = {
@@ -31,18 +32,19 @@ type TaskRow = {
   created_at: string;
   agent_provider?: string;
   agent_model?: string;
+  swarm_name?: string;
 };
 
 type LearningResponse = {
   recommendation: {
     provider: string;
     model: string;
-    similarity: number;
+    score: number;
   } | null;
   similar: Array<{
     provider: string;
     model: string;
-    similarity: number;
+    score: number;
   }>;
 };
 
@@ -90,6 +92,11 @@ export async function Dashboard() {
   const latestTask = tasks[0] ?? null;
   const swarmAgents = latestSwarm ? agents.filter((agent) => agent.swarm_id === latestSwarm.id) : agents;
 
+  const swarmRolesData = latestSwarm 
+    ? await fetchJson<{ jobs: Array<{ id: string }> }>(`/swarms/${latestSwarm.id}/roles`).catch(() => null)
+    : null;
+  const swarmRolesCount = swarmRolesData?.jobs?.length ?? 0;
+
   const learning = latestSwarm && latestTask
     ? await fetchJson<LearningResponse>('/learning/recommend', {
         method: 'POST',
@@ -123,9 +130,9 @@ export async function Dashboard() {
                 <div className="metricHint">{swarms.length ? 'Ready for task intake' : 'No swarms registered yet'}</div>
               </article>
               <article className="metric">
-                <span className="metricLabel">Fleet size</span>
-                <span className="metricValue">{agents.length}</span>
-                <div className="metricHint">{swarmAgents.length} agents attached to the latest swarm</div>
+                <span className="metricLabel">Attached Roles</span>
+                <span className="metricValue">{latestSwarm ? swarmRolesCount : 0}</span>
+                <div className="metricHint">{swarmAgents.length} agents spawned across roles</div>
               </article>
             </div>
 
@@ -182,12 +189,12 @@ export async function Dashboard() {
                       </div>
                       <div className="listSub">Recommended for the latest task</div>
                     </div>
-                    <strong>{liveRecommendation.similarity != null && !isNaN(liveRecommendation.similarity) ? `${Math.round(liveRecommendation.similarity * 100)}%` : 'N/A'}</strong>
+                    <strong>{liveRecommendation.score != null && !isNaN(liveRecommendation.score) ? `${Math.round(liveRecommendation.score * 100)}%` : 'N/A'}</strong>
                   </div>
                   <div className="chipRow">
-                    {learning?.similar.slice(0, 3).map((entry) => (
-                      <span key={`${entry.provider}-${entry.model}`} className="chip">
-                        {entry.provider}/{entry.model} · {entry.similarity != null && !isNaN(entry.similarity) ? `${Math.round(entry.similarity * 100)}%` : 'N/A'}
+                    {learning?.similar.slice(0, 3).map((entry, i) => (
+                      <span key={`${entry.provider}-${entry.model}-${i}`} className="chip">
+                        {entry.provider}/{entry.model} · {entry.score != null && !isNaN(entry.score) ? `${Math.round(entry.score * 100)}%` : 'N/A'}
                       </span>
                     ))}
                   </div>
@@ -261,7 +268,8 @@ export async function Dashboard() {
                 <table className="table">
                   <thead>
                     <tr>
-                      <th>Provider</th>
+                      <th>Role</th>
+                      <th>Agent</th>
                       <th>Status</th>
                       <th>Score</th>
                     </tr>
@@ -269,6 +277,9 @@ export async function Dashboard() {
                   <tbody>
                     {agents.slice(0, 5).map((agent) => (
                       <tr key={agent.id}>
+                        <td>
+                          <div className="listTitle">{agent.role_title || 'Unassigned'}</div>
+                        </td>
                         <td>
                           <div className="listTitle">{agent.provider}</div>
                           <div className="listSub">{agent.model}</div>
@@ -300,6 +311,7 @@ export async function Dashboard() {
                   <thead>
                     <tr>
                       <th>Description</th>
+                      <th>Swarm</th>
                       <th>Status</th>
                     </tr>
                   </thead>
@@ -309,6 +321,9 @@ export async function Dashboard() {
                         <td>
                           <div className="listTitle">{task.description}</div>
                           <div className="listSub">{formatDate(task.created_at)}</div>
+                        </td>
+                        <td>
+                          <div className="listTitle">{task.swarm_name || 'Unassigned'}</div>
                         </td>
                         <td>
                           <span className={statusClass(task.status)}>{task.status}</span>
