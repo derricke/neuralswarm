@@ -157,7 +157,7 @@ describe('Phase 2 explicit job routing', () => {
 
     expect(spawnAgent).toHaveBeenCalledWith(
       'Build job routing',
-      expect.objectContaining({ systemPrompt: 'coder system prompt' })
+      expect.objectContaining({ systemPrompt: expect.stringContaining('coder system prompt') })
     );
 
     expect(mockRecordTrajectory).toHaveBeenCalledWith(

@@ -259,6 +259,18 @@ metricsRouter.get('/prometheus', (_req: Request, res: Response) => {
   const completionRate = totalTasks > 0 ? completedTasks / totalTasks : 0;
 
   const dbInfo = getDatabaseSizeInfo();
+  const learningStatus = getLearningEngine().getRuntimeStatus();
+
+  let learningModeValue = 0;
+  if (learningStatus.mode === 'qdrant_active') learningModeValue = 1;
+  else if (learningStatus.mode === 'db_only_fallback') learningModeValue = 2;
+  else if (learningStatus.mode === 'db_only_disabled') learningModeValue = 3;
+
+  let learningProbeValue = 0;
+  if (learningStatus.probeStatus === 'passed') learningProbeValue = 1;
+  else if (learningStatus.probeStatus === 'failed') learningProbeValue = 2;
+  else if (learningStatus.probeStatus === 'skipped') learningProbeValue = 3;
+  else if (learningStatus.probeStatus === 'disabled') learningProbeValue = 4;
 
   const lines = [
     '# HELP swarms_total Total number of swarms',
@@ -294,6 +306,12 @@ metricsRouter.get('/prometheus', (_req: Request, res: Response) => {
     '# HELP database_size_alert_over_500mb Database size alert flag (1 when over 500MB)',
     '# TYPE database_size_alert_over_500mb gauge',
     `database_size_alert_over_500mb ${dbInfo.overThreshold ? 1 : 0}`,
+    '# HELP learning_mode Learning engine mode (1=qdrant_active, 2=db_only_fallback, 3=db_only_disabled, 0=pending_init)',
+    '# TYPE learning_mode gauge',
+    `learning_mode ${learningModeValue}`,
+    '# HELP learning_probe_status Learning dimension probe status (1=passed, 2=failed, 3=skipped, 4=disabled, 0=not_run)',
+    '# TYPE learning_probe_status gauge',
+    `learning_probe_status ${learningProbeValue}`,
   ];
 
   res.setHeader('Content-Type', 'text/plain; version=0.0.4; charset=utf-8');

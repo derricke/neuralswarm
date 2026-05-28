@@ -19,8 +19,24 @@ learningRouter.post('/recommend', async (req: Request, res: Response) => {
 
   const { swarm_id, task, limit } = parsed.data;
   const engine = getLearningEngine();
-  const similar = await engine.findSimilarTrajectories(swarm_id, task, limit ?? 5, true);
-  const recommendation = similar[0] ?? null;
+  const requestedLimit = limit ?? 5;
+  
+  // Fetch extra trajectories to ensure we can find enough unique models
+  const similarRaw = await engine.findSimilarTrajectories(swarm_id, task, requestedLimit * 4, true);
+  
+  const similar = [];
+  const seenModels = new Set<string>();
+  
+  for (const entry of similarRaw) {
+    const key = `${entry.provider}-${entry.model}`;
+    if (!seenModels.has(key)) {
+      seenModels.add(key);
+      similar.push(entry);
+    }
+  }
 
-  res.json({ recommendation, similar });
+  const similarSliced = similar.slice(0, requestedLimit);
+  const recommendation = similarSliced[0] ?? null;
+
+  res.json({ recommendation, similar: similarSliced });
 });

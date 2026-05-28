@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { fetchJson } from '@/lib/api';
 
@@ -46,6 +46,8 @@ type TaskRow = {
   created_at: string | number;
   result?: string;
   error?: string;
+  agent_provider?: string;
+  agent_model?: string;
 };
 
 const UUID_PATTERN =
@@ -92,7 +94,15 @@ function statusClass(status: string) {
   return 'status status-pending';
 }
 
-export default function SwarmControlPage() {
+export default function SwarmControlPageWrapper() {
+  return (
+    <Suspense fallback={<div>Loading...</div>}>
+      <SwarmControlPage />
+    </Suspense>
+  );
+}
+
+function SwarmControlPage() {
   const searchParams = useSearchParams();
   const [swarmInput, setSwarmInput] = useState('');
   const [selectedSwarmId, setSelectedSwarmId] = useState<string | null>(null);
@@ -271,25 +281,30 @@ export default function SwarmControlPage() {
     };
   }, [activeSwarmId]);
 
-  async function loadJobs() {
+  useEffect(() => {
     if (!activeSwarmId) {
-      setJobsMessage('Enter a valid swarm ID or exact swarm name first');
+      setJobs([]);
       return;
     }
 
-    setBusy(true);
-    setJobsMessage('');
+    let mounted = true;
+    fetchJson<{ jobs: JobRow[] }>(`/swarms/${activeSwarmId}/roles`)
+      .then((data) => {
+        if (mounted) {
+          setJobs(data.jobs);
+          setJobsMessage('');
+        }
+      })
+      .catch((err) => {
+        if (mounted) {
+          setJobsMessage(err instanceof Error ? err.message : 'Failed to load roles');
+        }
+      });
 
-    try {
-      const result = await fetchJson<{ jobs: JobRow[] }>(`/swarms/${activeSwarmId}/roles`);
-      setJobs(result.jobs);
-      setJobsMessage(`Loaded ${result.jobs.length} job(s)`);
-    } catch (err) {
-      setJobsMessage(err instanceof Error ? err.message : 'Failed to load jobs');
-    } finally {
-      setBusy(false);
-    }
-  }
+    return () => {
+      mounted = false;
+    };
+  }, [activeSwarmId]);
 
   async function submitTasks(e: React.FormEvent) {
     e.preventDefault();
@@ -367,6 +382,25 @@ export default function SwarmControlPage() {
       window.location.href = '/';
     } catch (err) {
       alert(err instanceof Error ? err.message : 'Failed to delete swarm');
+      setBusy(false);
+    }
+  }
+
+  async function removeRole(jobId: string) {
+    if (!activeSwarmId) return;
+    if (!confirm('Are you sure you want to remove this role from the swarm?')) return;
+    
+    setBusy(true);
+    setJobsMessage('');
+    try {
+      await fetchJson(`/swarms/${activeSwarmId}/roles/${jobId}`, {
+        method: 'DELETE',
+      });
+      const data = await fetchJson<{ jobs: JobRow[] }>(`/swarms/${activeSwarmId}/roles`);
+      setJobs(data.jobs);
+    } catch (err) {
+      setJobsMessage(err instanceof Error ? err.message : 'Failed to remove role');
+    } finally {
       setBusy(false);
     }
   }
@@ -537,24 +571,9 @@ export default function SwarmControlPage() {
               ) : null}
             </div>
             <div className="actions" style={{ marginTop: '1rem' }}>
-              <button type="button" className="button" onClick={loadJobs} disabled={busy || !canAct}>
-                Load roles
-              </button>
               <button type="button" className="button buttonPrimary" onClick={startSwarm} disabled={busy || !canAct}>
                 Start swarm
               </button>
-              <a
-                className="button"
-                href={canAct ? `/roles/create?swarmId=${encodeURIComponent(activeSwarmIdValue)}` : '/roles/create'}
-              >
-                Create Role
-              </a>
-              <a
-                className="button"
-                href={canAct ? `/swarms/manage-roles?swarmId=${encodeURIComponent(activeSwarmIdValue)}` : '/swarms/manage-roles'}
-              >
-                Assign Roles
-              </a>
               {canAct && (
                 <button type="button" className="button" style={{ borderColor: 'var(--status-failed)', color: 'var(--status-failed)' }} onClick={deleteSwarm} disabled={busy}>
                   Delete Swarm
@@ -601,33 +620,49 @@ export default function SwarmControlPage() {
 
           <article className="formCard">
             <div className="sectionHeader">
-              <h2>Current roles</h2>
-              <span className="tag">overview</span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                <h2>Current roles</h2>
+                <span className="tag">overview</span>
+              </div>
+              {canAct && (
+                <div className="chipRow">
+                  <a href={`/role/create?swarmId=${encodeURIComponent(activeSwarmIdValue)}`} className="chip">Create</a>
+                  <a href={`/swarm/manage-roles?swarmId=${encodeURIComponent(activeSwarmIdValue)}`} className="chip">Assign</a>
+                </div>
+              )}
             </div>
             {jobs.length > 0 ? (
               <table className="table">
                 <thead>
                   <tr>
                     <th>Title</th>
-                    <th>Provider</th>
-                    <th>Model</th>
                     <th>Agents</th>
+                    <th>Actions</th>
                   </tr>
                 </thead>
                 <tbody>
                   {jobs.map((job) => (
                     <tr key={job.id}>
                       <td>{job.title}</td>
-                      <td>{job.provider}</td>
-                      <td>{job.model}</td>
                       <td>{job.agents_count ?? 0}</td>
+                      <td>
+                        <button
+                          type="button"
+                          className="button buttonGhost"
+                          style={{ padding: '0.42rem 0.7rem', fontSize: '0.78rem', color: 'var(--status-failed, #dc2626)' }}
+                          onClick={() => removeRole(job.id)}
+                          disabled={busy}
+                        >
+                          Remove
+                        </button>
+                      </td>
                     </tr>
                   ))}
                 </tbody>
               </table>
             ) : (
               <div className="emptyState">
-                No roles yet. Use <a href={canAct ? `/roles/create?swarmId=${encodeURIComponent(activeSwarmIdValue)}` : '/roles/create'} style={{ color: 'var(--accent)', textDecoration: 'underline' }}>Create Role</a> to add to the global catalog, then <a href={canAct ? `/swarms/manage-roles?swarmId=${encodeURIComponent(activeSwarmIdValue)}` : '/swarms/manage-roles'} style={{ color: 'var(--accent)', textDecoration: 'underline' }}>Assign Roles</a> for this swarm.
+                No roles yet. Use <a href={canAct ? `/role/create?swarmId=${encodeURIComponent(activeSwarmIdValue)}` : '/role/create'} style={{ color: 'var(--accent)', textDecoration: 'underline' }}>Create Role</a> to add to the global catalog, then <a href={canAct ? `/swarm/manage-roles?swarmId=${encodeURIComponent(activeSwarmIdValue)}` : '/swarm/manage-roles'} style={{ color: 'var(--accent)', textDecoration: 'underline' }}>Assign Roles</a> for this swarm.
               </div>
             )}
           </article>
@@ -668,6 +703,13 @@ export default function SwarmControlPage() {
                       </td>
                       <td>
                         <span className={statusClass(task.status)}>{task.status}</span>
+                        {(task.agent_provider || task.agent_model) && (
+                          <div style={{ marginTop: '0.4rem', fontSize: '0.75rem', opacity: 0.8, display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+                            <span className="chip" style={{ padding: '0.1rem 0.4rem', fontSize: '0.7rem' }}>
+                              {task.agent_provider} / {task.agent_model}
+                            </span>
+                          </div>
+                        )}
                       </td>
                       <td>
                         {(task.status.toLowerCase() === 'completed' || task.status.toLowerCase() === 'failed' || task.status.toLowerCase() === 'cancelled') && (
@@ -711,9 +753,7 @@ export default function SwarmControlPage() {
                 />
                 <datalist id="job-options">
                   {jobs.map((job) => (
-                    <option key={job.id} value={job.title}>
-                      {job.provider}/{job.model}
-                    </option>
+                    <option key={job.id} value={job.title} />
                   ))}
                 </datalist>
               </div>

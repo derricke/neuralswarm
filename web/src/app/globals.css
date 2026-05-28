@@ -435,7 +435,7 @@ select {
   color: var(--muted);
 }
 
-.field input,
+.field input:not([type="checkbox"]),
 .field textarea,
 .field select {
   @apply w-full rounded-2xl border px-4 py-[0.92rem] outline-none;
@@ -448,7 +448,7 @@ select {
   @apply min-h-36 resize-y;
 }
 
-.field input:focus,
+.field input:not([type="checkbox"]):focus,
 .field textarea:focus,
 .field select:focus {
   @apply ring-4;

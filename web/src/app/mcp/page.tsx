@@ -32,6 +32,7 @@ export default function McpServersPage() {
 
   const [name, setName] = useState('');
   const [configJson, setConfigJson] = useState('');
+  const [editingId, setEditingId] = useState<string | null>(null);
 
   const fetchServers = async () => {
     try {
@@ -68,15 +69,24 @@ export default function McpServersPage() {
     }
 
     try {
-      await fetchJson('/mcp-servers', {
-        method: 'POST',
-        body: JSON.stringify({ name: name.trim(), config: parsedConfig }),
-      });
+      if (editingId) {
+        await fetchJson(`/mcp-servers/${editingId}`, {
+          method: 'PUT',
+          body: JSON.stringify({ name: name.trim(), config: parsedConfig }),
+        });
+        setMessage(`Updated MCP server configuration "${name.trim()}"`);
+      } else {
+        await fetchJson('/mcp-servers', {
+          method: 'POST',
+          body: JSON.stringify({ name: name.trim(), config: parsedConfig }),
+        });
+        setMessage(`Saved MCP server configuration "${name.trim()}"`);
+      }
       
-      setMessage(`Saved MCP server configuration "${name.trim()}"`);
       setState('success');
       setName('');
       setConfigJson(EXAMPLE_JSON);
+      setEditingId(null);
       fetchServers();
     } catch (err: any) {
       setMessage(err instanceof Error ? err.message : 'Failed to save server');
@@ -110,7 +120,7 @@ export default function McpServersPage() {
 
         <article className="formCard">
           <div className="sectionHeader">
-            <h2>Add MCP Server Config</h2>
+            <h2>{editingId ? 'Edit MCP Server Config' : 'Add MCP Server Config'}</h2>
             <span className="tag">form</span>
           </div>
           <form onSubmit={handleSave} className="stack">
@@ -131,7 +141,22 @@ export default function McpServersPage() {
               <div className="helper">Enter standard MCP server JSON configurations here.</div>
             </div>
             <div className="actions">
-              <button type="submit" className="button buttonPrimary" disabled={state === 'loading'}>Save configuration</button>
+              <button type="submit" className="button buttonPrimary" disabled={state === 'loading'}>
+                {editingId ? 'Update configuration' : 'Save configuration'}
+              </button>
+              {editingId && (
+                <button
+                  type="button"
+                  className="button buttonSecondary"
+                  onClick={() => {
+                    setEditingId(null);
+                    setName('');
+                    setConfigJson(EXAMPLE_JSON);
+                  }}
+                >
+                  Cancel
+                </button>
+              )}
             </div>
           </form>
           {message ? <div className={`notice ${state === 'error' ? 'error' : ''}`}>{message}</div> : null}
@@ -160,11 +185,23 @@ export default function McpServersPage() {
                         {JSON.stringify(server.config, null, 2)}
                       </code>
                     </td>
-                    <td>
+                    <td style={{ display: 'flex', gap: '8px' }}>
+                      <button 
+                        onClick={() => {
+                          setEditingId(server.id);
+                          setName(server.name);
+                          setConfigJson(JSON.stringify(server.config, null, 2));
+                          window.scrollTo({ top: 0, behavior: 'smooth' });
+                        }}
+                        className="button buttonSecondary"
+                        style={{ padding: '0.25rem 0.5rem' }}
+                      >
+                        Edit
+                      </button>
                       <button 
                         onClick={() => handleDelete(server.id)}
-                        className="button"
-                        style={{ padding: '0.25rem 0.5rem', color: 'var(--status-failed, #dc2626)', borderColor: 'var(--status-failed, #dc2626)' }}
+                        className="button buttonDanger"
+                        style={{ padding: '0.25rem 0.5rem' }}
                       >
                         Delete
                       </button>

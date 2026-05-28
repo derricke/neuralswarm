@@ -62,8 +62,19 @@ agentsRouter.get('/', (req: Request, res: Response) => {
   const swarmId = typeof req.query.swarm_id === 'string' ? req.query.swarm_id : undefined;
 
   const agents = swarmId
-    ? db.prepare('SELECT * FROM agents WHERE swarm_id = ? ORDER BY created_at DESC').all(swarmId)
-    : db.prepare('SELECT * FROM agents ORDER BY created_at DESC').all();
+    ? db.prepare(`
+        SELECT a.*, sj.title as role_title 
+        FROM agents a
+        LEFT JOIN swarm_jobs sj ON a.job_id = sj.id
+        WHERE a.swarm_id = ? 
+        ORDER BY a.created_at DESC
+      `).all(swarmId)
+    : db.prepare(`
+        SELECT a.*, sj.title as role_title 
+        FROM agents a
+        LEFT JOIN swarm_jobs sj ON a.job_id = sj.id
+        ORDER BY a.created_at DESC
+      `).all();
 
   res.json(agents);
 });

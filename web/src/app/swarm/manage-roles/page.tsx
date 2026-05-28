@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { fetchJson } from '@/lib/api';
 
@@ -64,7 +64,15 @@ function resolveSwarmId(input: string, swarms: SwarmOption[]): string | null {
   return UUID_PATTERN.test(normalized) ? normalized : null;
 }
 
-export default function ManageJobsPage() {
+export default function ManageJobsPageWrapper() {
+  return (
+    <Suspense fallback={<div>Loading...</div>}>
+      <ManageJobsPage />
+    </Suspense>
+  );
+}
+
+function ManageJobsPage() {
   const searchParams = useSearchParams();
 
   const [swarmInput, setSwarmInput] = useState('');
@@ -422,7 +430,7 @@ export default function ManageJobsPage() {
               <option value="">Select a global role</option>
               {globalJobs.map((job) => (
                 <option key={job.id} value={job.id}>
-                  {job.title} ({job.provider}/{job.model})
+                  {job.title}
                 </option>
               ))}
             </select>
@@ -431,11 +439,11 @@ export default function ManageJobsPage() {
             <button type="button" className="button buttonPrimary" onClick={addFromCatalog} disabled={state === 'loading' || !canAct || !selectedGlobalJobId}>
               Assign role to swarm
             </button>
-            <a className="button" href={canAct ? `/roles/create?swarmId=${encodeURIComponent(activeSwarmIdValue)}` : '/roles/create'}>
+            <a className="button" href={canAct ? `/role/create?swarmId=${encodeURIComponent(activeSwarmIdValue)}` : '/role/create'}>
               Create Role
             </a>
-            <a className="button" href={canAct ? `/swarms/control?swarmId=${encodeURIComponent(activeSwarmIdValue)}` : '/swarms/control'}>
-              Back to swarm control
+            <a className="button" href={canAct ? `/swarm/edit?swarmId=${encodeURIComponent(activeSwarmIdValue)}` : '/swarm/edit'}>
+              Back to dashboard
             </a>
           </div>
           {message ? <div className={`notice ${state === 'error' ? 'error' : ''}`}>{message}</div> : null}
@@ -451,8 +459,6 @@ export default function ManageJobsPage() {
               <thead>
                 <tr>
                   <th>Title</th>
-                  <th>Provider</th>
-                  <th>Model</th>
                   <th>Agents</th>
                 </tr>
               </thead>
@@ -460,8 +466,6 @@ export default function ManageJobsPage() {
                 {jobs.map((job) => (
                   <tr key={job.id}>
                     <td>{job.title}</td>
-                    <td>{job.provider}</td>
-                    <td>{job.model}</td>
                     <td>{job.agents_count ?? 0}</td>
                   </tr>
                 ))}

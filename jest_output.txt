@@ -1,0 +1,517 @@
+PASS src/tests/memory/trajectoryStore.test.ts
+PASS src/tests/lib/taskParser.test.ts
+PASS src/tests/agents/typeProfile.test.ts
+PASS src/tests/mcp.test.ts
+PASS src/tests/coordinator/startSwarm.test.ts
+PASS src/tests/learning/engine.test.ts
+PASS src/tests/routes/taskAssignment.test.ts
+FAIL src/tests/coordinator/jobRouting.test.ts
+  ● Phase 2 explicit job routing › runTask uses job system prompt and logs trajectory job_id
+
+    expect(jest.fn()).toHaveBeenCalledWith(...expected)
+
+    Expected: "Build job routing", ObjectContaining {"systemPrompt": "coder system prompt"}
+    Received
+           1: "You are a routing system for intelligent agent model selection.
+    Return JSON only — no explanation, no markdown.·
+    TIER DEFINITIONS:
+    - pro: The heavy lifter. Use for Google Workspace plugin tasks,
+      complex MCP tool orchestration, multi-step reasoning, deep debugging, architecture decisions,
+      or any prompt that requires reading multiple files and synthesizing a plan.
+    - flash: The default. Use for general coding questions, chat,
+      single-file modifications, quick lookups, summarization, and simple text generation.·
+    Choose {\"tier\":\"pro\"} only when the prompt clearly demands the heavy lifter capabilities above.
+    Choose {\"tier\":\"flash\"} for everything else.
+    Prompt: \"Build job routing\"", {"model": "gemini-2.5-flash", "provider": "google", "temperature": 0}
+           2: "Build job routing", {"maxTokens": undefined, "mcpServers": [], "model": "gpt-4o-mini", "onStreamChunk": [Function onStreamChunk], "provider": "openai", "systemPrompt": "You are an autonomous AI agent in a non-interactive swarm framework.·
+    You MUST execute the user's task using the provided function calling capabilities (tools).·
+    CRITICAL: Do NOT hallucinate tool executions (e.g. do not output <execute_bash> tags or markdown code blocks expecting them to run). You MUST use the native tool calling schema provided to you via the API.
+    NEVER ask for permission, NEVER ask clarifying questions, and NEVER wait for user input. Make reasonable assumptions to complete the task fully. If you need to create a project, just do it with default names if not specified.
+    IMPORTANT: First use directory listing or search tools to explore the workspace and find relevant files before modifying them!\\n\\nWorkspace Directory: /home/derrick/Projects/neuralswarm\\nTop-level Files: .agents, .claude, .dockerignore, .env, .env.example, .git, .github, .gitignore, .vscode, Dockerfile, ENV_GUIDE.md, LICENSE, README.md, TODO, data, diagnostics-reports, dist, docker-compose.yml, graphify-out, index.js...\\n\\ncoder system prompt", "temperature": 0.7}
+
+    Number of calls: 2
+
+      156 |     expect(task.agent_id).toBe(agentId);
+      157 |
+    > 158 |     expect(spawnAgent).toHaveBeenCalledWith(
+          |                        ^
+      159 |       'Build job routing',
+      160 |       expect.objectContaining({ systemPrompt: 'coder system prompt' })
+      161 |     );
+
+      at Object.<anonymous> (src/tests/coordinator/jobRouting.test.ts:158:24)
+
+[15:07:07.844] [32mINFO[39m (17715): [36mdatabase opened[39m
+    [35mpath[39m: ":memory:"
+[15:07:07.849] [32mINFO[39m (17715): [36magent type profile created[39m
+    [35mprovider[39m: "openai"
+    [35mmodel[39m: "gpt-4o"
+[15:07:07.854] [32mINFO[39m (17715): [36mdatabase opened[39m
+    [35mpath[39m: ":memory:"
+[15:07:07.857] [32mINFO[39m (17715): [36magent type profile created[39m
+    [35mprovider[39m: "openai"
+    [35mmodel[39m: "gpt-4o"
+[15:07:07.858] [32mINFO[39m (17715): [36mdatabase opened[39m
+    [35mpath[39m: ":memory:"
+[15:07:07.860] [32mINFO[39m (17715): [36magent type profile created[39m
+    [35mprovider[39m: "anthropic"
+    [35mmodel[39m: "claude-3-5-sonnet"
+[15:07:07.861] [32mINFO[39m (17715): [36mdatabase opened[39m
+    [35mpath[39m: ":memory:"
+[15:07:07.864] [32mINFO[39m (17715): [36magent type profile created[39m
+    [35mprovider[39m: "openai"
+    [35mmodel[39m: "gpt-4o"
+[15:07:07.866] [32mINFO[39m (17715): [36mdatabase opened[39m
+    [35mpath[39m: ":memory:"
+[15:07:07.868] [32mINFO[39m (17715): [36magent type profile created[39m
+    [35mprovider[39m: "google"
+    [35mmodel[39m: "gemini-2.0-flash"
+[15:07:07.869] [32mINFO[39m (17715): [36mdatabase opened[39m
+    [35mpath[39m: ":memory:"
+[15:07:07.872] [32mINFO[39m (17715): [36magent type profile created[39m
+    [35mprovider[39m: "openai"
+    [35mmodel[39m: "gpt-4o"
+[15:07:07.872] [32mINFO[39m (17715): [36magent type system prompt updated[39m
+    [35mprovider[39m: "openai"
+    [35mmodel[39m: "gpt-4o"
+[15:07:07.873] [32mINFO[39m (17715): [36mdatabase opened[39m
+    [35mpath[39m: ":memory:"
+[15:07:07.875] [32mINFO[39m (17715): [36magent type profile created[39m
+    [35mprovider[39m: "openai"
+    [35mmodel[39m: "gpt-4o"
+[15:07:07.876] [32mINFO[39m (17715): [36magent type profile created[39m
+    [35mprovider[39m: "anthropic"
+    [35mmodel[39m: "claude-3-5-sonnet"
+[15:07:07.849] [32mINFO[39m (17717): [36mdatabase opened[39m
+    [35mpath[39m: ":memory:"
+[15:07:07.854] [32mINFO[39m (17717): [36mdatabase opened[39m
+    [35mpath[39m: ":memory:"
+[15:07:07.859] [32mINFO[39m (17717): [36mdatabase opened[39m
+    [35mpath[39m: ":memory:"
+[15:07:07.864] [32mINFO[39m (17717): [36mtrajectory cleanup complete[39m
+    [35marchived[39m: 1
+    [35mdeleted[39m: 0
+[15:07:07.905] [32mINFO[39m (17699): [36mdatabase opened[39m
+    [35mpath[39m: ":memory:"
+[15:07:07.911] [32mINFO[39m (17688): [36mdatabase opened[39m
+    [35mpath[39m: ":memory:"
+[15:07:07.910] [32mINFO[39m (17699): [36mlearning dimension probe passed[39m
+    [35mdimension[39m: 3
+[15:07:07.910] [32mINFO[39m (17699): [36mlearning engine index rebuilt[39m
+    [35mtrajectoriesIndexed[39m: 0
+    [35mtrajectoriesSkipped[39m: 0
+[15:07:07.911] [33mWARN[39m (17699): [36mlearning-engine query embedding failed[39m
+    [35mswarmId[39m: "bfce7005-4b72-4d77-ba6c-16de2cb7bc16"
+    error: {}
+[15:07:07.915] [32mINFO[39m (17699): [36mdatabase opened[39m
+    [35mpath[39m: ":memory:"
+[15:07:07.919] [32mINFO[39m (17699): [36mlearning dimension probe passed[39m
+    [35mdimension[39m: 3
+[15:07:07.919] [32mINFO[39m (17699): [36mlearning engine index rebuilt[39m
+    [35mtrajectoriesIndexed[39m: 0
+    [35mtrajectoriesSkipped[39m: 0
+[15:07:07.921] [32mINFO[39m (17699): [36mdatabase opened[39m
+    [35mpath[39m: ":memory:"
+[15:07:07.925] [32mINFO[39m (17699): [36mlearning dimension probe passed[39m
+    [35mdimension[39m: 3
+[15:07:07.926] [32mINFO[39m (17699): [36mlearning engine index rebuilt[39m
+    [35mtrajectoriesIndexed[39m: 0
+    [35mtrajectoriesSkipped[39m: 0
+[15:07:07.927] [32mINFO[39m (17699): [36mdatabase opened[39m
+    [35mpath[39m: ":memory:"
+[15:07:07.930] [32mINFO[39m (17699): [36mlearning dimension probe passed[39m
+    [35mdimension[39m: 3
+[15:07:07.930] [32mINFO[39m (17699): [36mlearning engine index rebuilt[39m
+    [35mtrajectoriesIndexed[39m: 0
+    [35mtrajectoriesSkipped[39m: 0
+[15:07:07.932] [32mINFO[39m (17699): [36mdatabase opened[39m
+    [35mpath[39m: ":memory:"
+[15:07:07.936] [32mINFO[39m (17699): [36mlearning embeddings unavailable; disabling qdrant[39m
+    error: "No embedding provider configured: set GOOGLE_API_KEY, OPENAI_API_KEY, OPENAI_COMPATIBLE_API_KEY+OPENAI_COMPATIBLE_URL, or OLLAMA_HOST"
+[15:07:07.916] [32mINFO[39m (17688): [36mdefault agent config selected from environment[39m
+    [35mprovider[39m: "google"
+    [35mmodel[39m: "gemini-2.5-flash"
+    [35mhasGoogleKey[39m: true
+    [35mhasOpenAIKey[39m: true
+    [35mhasAnthropicKey[39m: true
+    [35mhasOpenAICompatibleConfig[39m: false
+[15:07:07.918] [32mINFO[39m (17688): [36magent type profile created[39m
+    [35mprovider[39m: "openai"
+    [35mmodel[39m: "gpt-4o"
+[15:07:07.919] [32mINFO[39m (17688): [36magent type profile created[39m
+    [35mprovider[39m: "anthropic"
+    [35mmodel[39m: "claude-3-5-sonnet"
+[15:07:07.920] [32mINFO[39m (17688): [36mrouter selected model tier[39m
+    [35mtier[39m: "flash"
+[15:07:07.921] [32mINFO[39m (17688): [36mrouter selected model tier[39m
+    [35mtier[39m: "flash"
+[15:07:07.922] [32mINFO[39m (17688): [36mtask completed[39m
+    [35mtaskId[39m: "64d5eddd-dc4f-477f-85c8-b0a8959c3892"
+    [35magentId[39m: "516ddfbc-435c-4bf5-aedf-414b58e40ad3"
+    [35mattempt[39m: 0
+[15:07:07.922] [32mINFO[39m (17688): [36mtask completed[39m
+    [35mtaskId[39m: "5618ecff-327e-47ed-abec-54c305d6ad33"
+    [35magentId[39m: "25696fe9-277b-4233-9834-2f94c9700e52"
+    [35mattempt[39m: 0
+[15:07:07.923] [32mINFO[39m (17688): [36mdatabase opened[39m
+    [35mpath[39m: ":memory:"
+[15:07:07.926] [32mINFO[39m (17688): [36mauto-hiring fallback agent for pending tasks[39m
+    [35mswarmId[39m: "94622f9a-fb98-4d31-b439-55fc7ae194bd"
+    [35mprovider[39m: "google"
+    [35mmodel[39m: "gemini-2.0-flash"
+[15:07:07.926] [31mERROR[39m (17688): [36mdispatcher failed to parse json[39m
+    [35mtaskId[39m: "c46ae11c-a08e-4bfb-883b-ab4066fda24f"
+    [35moutput[39m: "ok"
+    error: {}
+[15:07:07.927] [32mINFO[39m (17688): [36magent type profile created[39m
+    [35mprovider[39m: "google"
+    [35mmodel[39m: "gemini-2.0-flash"
+[15:07:07.928] [32mINFO[39m (17688): [36mtask completed[39m
+    [35mtaskId[39m: "c46ae11c-a08e-4bfb-883b-ab4066fda24f"
+    [35magentId[39m: "ba366e31-dbf3-425b-8c01-5e280b566108"
+    [35mattempt[39m: 0
+[15:07:07.933] [32mINFO[39m (17662): [36mdatabase opened[39m
+    [35mpath[39m: ":memory:"
+[15:07:07.909] [32mINFO[39m (17636): [36mdatabase opened[39m
+    [35mpath[39m: ":memory:"
+[15:07:07.916] [32mINFO[39m (17636): [36mdatabase opened[39m
+    [35mpath[39m: ":memory:"
+[15:07:07.921] [33mWARN[39m (17636): [36mno available agent[39m
+    [35mtaskId[39m: "50ff02e0-b041-4876-891e-7694b5b12906"
+    [35mrequiredJobId[39m: "ec063cb5-9643-40d5-8f06-01f3b18492d1"
+[15:07:07.922] [32mINFO[39m (17636): [36mdatabase opened[39m
+    [35mpath[39m: ":memory:"
+[15:07:07.926] [32mINFO[39m (17636): [36mrouter selected model tier[39m
+    [35mtier[39m: "flash"
+[15:07:07.927] [32mINFO[39m (17636): [36mtask completed[39m
+    [35mtaskId[39m: "1a8fd50e-2672-429f-a8f6-af95f2a21093"
+    [35magentId[39m: "4274995d-904a-4592-94a5-0c71e379bdf1"
+    [35mattempt[39m: 0
+[15:07:07.939] [32mINFO[39m (17636): [36mdatabase opened[39m
+    [35mpath[39m: ":memory:"
+[15:07:07.943] [31mERROR[39m (17636): [36mdispatcher failed to parse json[39m
+    [35mtaskId[39m: "77275236-aa8b-4f72-9fac-6ef64ad2c8af"
+    [35moutput[39m: "reviewed"
+    error: {}
+[15:07:07.944] [32mINFO[39m (17636): [36mtask completed[39m
+    [35mtaskId[39m: "77275236-aa8b-4f72-9fac-6ef64ad2c8af"
+    [35magentId[39m: "dc8f79a4-5756-4f3d-a7f8-7a6fa9c499dd"
+    [35mattempt[39m: 0
+[15:07:07.945] [32mINFO[39m (17636): [36mdatabase opened[39m
+    [35mpath[39m: ":memory:"
+[15:07:07.949] [31mERROR[39m (17636): [36mdispatcher failed to parse json[39m
+    [35mtaskId[39m: "a0b1ca85-2bd7-45f7-b311-0fb3c877f45f"
+    [35moutput[39m: "completed"
+    error: {}
+[15:07:07.950] [32mINFO[39m (17636): [36mrouter selected model tier[39m
+    [35mtier[39m: "flash"
+[15:07:07.950] [32mINFO[39m (17636): [36mtask completed[39m
+    [35mtaskId[39m: "a0b1ca85-2bd7-45f7-b311-0fb3c877f45f"
+    [35magentId[39m: "b447eba5-ca65-4b3d-a456-249117ceffb9"
+    [35mattempt[39m: 0
+[15:07:07.950] [32mINFO[39m (17636): [36mdatabase opened[39m
+    [35mpath[39m: ":memory:"
+[15:07:07.954] [32mINFO[39m (17636): [36mrouter selected model tier[39m
+    [35mtier[39m: "flash"
+[15:07:07.954] [32mINFO[39m (17636): [36mtask completed[39m
+    [35mtaskId[39m: "99075bec-1d74-4078-9a12-eb1726b6e27c"
+    [35magentId[39m: "3cf198ef-bf97-4b78-a025-cd2a5cf38077"
+    [35mattempt[39m: 0
+[15:07:07.955] [31mERROR[39m (17636): [36mrouting failed, defaulting to flash model[39m
+    err: {
+      "type": "Error",
+      "message": "provider_error",
+      "stack":
+          Error: provider_error
+              at Object.<anonymous> (/home/derrick/Projects/neuralswarm/src/tests/coordinator/jobRouting.test.ts:302:49)
+              at processTicksAndRejections (node:internal/process/task_queues:104:5)
+    }
+[15:07:07.955] [33mWARN[39m (17636): [36mtask attempt failed[39m
+    [35mtaskId[39m: "c74681e4-a567-43f8-8328-56ec94a7ac21"
+    [35magentId[39m: "3cf198ef-bf97-4b78-a025-cd2a5cf38077"
+    [35mattempt[39m: 1
+    [35merrorType[39m: "provider_error"
+[15:07:07.956] [33mWARN[39m (17636): [36mtask attempt failed[39m
+    [35mtaskId[39m: "c74681e4-a567-43f8-8328-56ec94a7ac21"
+    [35magentId[39m: "3cf198ef-bf97-4b78-a025-cd2a5cf38077"
+    [35mattempt[39m: 2
+    [35merrorType[39m: "provider_error"
+[15:07:07.957] [33mWARN[39m (17636): [36mtask attempt failed[39m
+    [35mtaskId[39m: "c74681e4-a567-43f8-8328-56ec94a7ac21"
+    [35magentId[39m: "3cf198ef-bf97-4b78-a025-cd2a5cf38077"
+    [35mattempt[39m: 3
+    [35merrorType[39m: "provider_error"
+[15:07:07.957] [31mERROR[39m (17636): [36mtask exhausted retries[39m
+    [35mtaskId[39m: "c74681e4-a567-43f8-8328-56ec94a7ac21"
+[15:07:07.958] [32mINFO[39m (17636): [36mdatabase opened[39m
+    [35mpath[39m: ":memory:"
+[15:07:07.960] [31mERROR[39m (17636): [36mdispatcher failed to parse json[39m
+    [35mtaskId[39m: "3220265a-18e8-48ef-9c5d-33d270fda8b5"
+    [35moutput[39m: "completed despite recommendation failure"
+    error: {}
+[15:07:07.960] [33mWARN[39m (17636): [36magent recommendation failed; falling back to idle-agent routing[39m
+    [35mswarmId[39m: "866b4cb4-18c0-4fb5-aa59-7820fd919f88"
+    error: {}
+[15:07:07.960] [32mINFO[39m (17636): [36mrouter selected model tier[39m
+    [35mtier[39m: "flash"
+[15:07:07.961] [32mINFO[39m (17636): [36mtask completed[39m
+    [35mtaskId[39m: "3220265a-18e8-48ef-9c5d-33d270fda8b5"
+    [35magentId[39m: "1fe489d1-fd19-44e0-a3ad-f9cff37d98fe"
+    [35mattempt[39m: 0
+[15:07:07.961] [32mINFO[39m (17636): [36mdatabase opened[39m
+    [35mpath[39m: ":memory:"
+[15:07:07.963] [31mERROR[39m (17636): [36mdispatcher failed to parse json[39m
+    [35mtaskId[39m: "f83dcba3-a99c-4823-a898-80ef713fe4e4"
+    [35moutput[39m: "completed despite side effect failures"
+    error: {}
+[15:07:07.963] [33mWARN[39m (17636): [36magent type profile load failed; using defaults[39m
+    [35mprovider[39m: "openai"
+    [35mmodel[39m: "gpt-4o"
+    error: {}
+[15:07:07.963] [32mINFO[39m (17636): [36mrouter selected model tier[39m
+    [35mtier[39m: "flash"
+[15:07:07.963] [33mWARN[39m (17636): [36magent profile update failed[39m
+    [35mprovider[39m: "openai"
+    [35mmodel[39m: "gpt-4o"
+    [35msuccess[39m: true
+    error: {}
+[15:07:07.963] [33mWARN[39m (17636): [36mtrajectory logging failed[39m
+    [35mtaskId[39m: "f83dcba3-a99c-4823-a898-80ef713fe4e4"
+    error: {}
+[15:07:07.964] [32mINFO[39m (17636): [36mtask completed[39m
+    [35mtaskId[39m: "f83dcba3-a99c-4823-a898-80ef713fe4e4"
+    [35magentId[39m: "675d8525-b28f-45c1-b92b-f24d2d575d65"
+    [35mattempt[39m: 0
+[15:07:07.941] [32mINFO[39m (17650): [36mdatabase opened[39m
+    [35mpath[39m: ":memory:"
+[15:07:07.978] [33mWARN[39m (17650): [36mmissing or invalid authorization header[39m
+    [35mpath[39m: "/api-keys"
+PASS src/tests/routes/diagnostics.test.ts
+PASS src/tests/coordinator/dispatcher.test.ts
+PASS src/tests/lib/dbMigration.test.ts
+PASS src/tests/routes/health.test.ts
+[15:07:07.986] [32mINFO[39m (17650): [36mdatabase opened[39m
+    [35mpath[39m: ":memory:"
+[15:07:07.976] [32mINFO[39m (17682): [36mdatabase opened[39m
+    [35mpath[39m: ":memory:"
+[15:07:08.012] [32mINFO[39m (17695): [36mdatabase opened[39m
+    [35mpath[39m: ":memory:"
+[15:07:08.013] [32mINFO[39m (17650): [36mdatabase opened[39m
+    [35mpath[39m: ":memory:"
+[15:07:08.016] [32mINFO[39m (17695): [36mdispatcher made a decision[39m
+    [35mtaskId[39m: "ffefad94-16d8-4fa1-bf46-7f6cf7522c93"
+    [35maction[39m: "breakdown"
+[15:07:08.019] [32mINFO[39m (17695): [36mdatabase opened[39m
+    [35mpath[39m: ":memory:"
+[15:07:08.022] [32mINFO[39m (17695): [36mdispatcher made a decision[39m
+    [35mtaskId[39m: "01f4fee1-651e-42c5-91db-b17bece73815"
+    [35maction[39m: "hire"
+[15:07:08.022] [32mINFO[39m (17695): [36mglobal role created[39m
+    [35mglobalRoleId[39m: "2e81a249-1bb2-4447-bc83-7d5903c9576f"
+    [35mtitle[39m: "Next.js Project Creator"
+[15:07:08.022] [32mINFO[39m (17695): [36mglobal role assigned to swarm[39m
+    [35mswarmId[39m: "e88e1f66-e5df-4c5b-8df0-8ef28d6d834c"
+    [35mglobalRoleId[39m: "2e81a249-1bb2-4447-bc83-7d5903c9576f"
+    [35mroleId[39m: "f98f56b6-1b76-4cfd-bdff-3a9b7426b2ec"
+[15:07:08.022] [32mINFO[39m (17695): [36mdispatcher auto-hired agent for new role[39m
+    [35mtaskId[39m: "01f4fee1-651e-42c5-91db-b17bece73815"
+    [35mroleId[39m: "f98f56b6-1b76-4cfd-bdff-3a9b7426b2ec"
+    [35magentId[39m: "80a81ce8-6c2c-4060-a1ac-f6b7b6aa168d"
+    [35mprovider[39m: "google"
+    [35mmodel[39m: "gemini-2.5-flash"
+[15:07:08.030] [33mWARN[39m (17650): [36mmissing or invalid authorization header[39m
+    [35mpath[39m: "/protected"
+[15:07:08.036] [32mINFO[39m (17710): [36mdatabase opened[39m
+    [35mpath[39m: "/tmp/neuralswarm-legacy-EwPPTJ/legacy.db"
+[15:07:08.033] [32mINFO[39m (17650): [36mdatabase opened[39m
+    [35mpath[39m: ":memory:"
+[15:07:08.071] [33mWARN[39m (17650): [36minvalid api key[39m
+    [35mpath[39m: "/protected"
+[15:07:08.071] [31mERROR[39m (17669): [36mdatabase open failed[39m
+    [35mpath[39m: "/home/derrick/Projects/neuralswarm/definitely-missing-dir/neuralswarm.db"
+    error: "Cannot open database because the directory does not exist"
+[15:07:08.043] [32mINFO[39m (17661): [36mdatabase opened[39m
+    [35mpath[39m: ":memory:"
+PASS src/tests/coordinator/healthMonitor.test.ts
+PASS src/tests/agents/spawner.test.ts
+PASS src/tests/routes/metrics.test.ts
+PASS src/tests/middleware/auth.test.ts
+[15:07:08.073] [32mINFO[39m (17650): [36mdatabase opened[39m
+    [35mpath[39m: ":memory:"
+[15:07:08.102] [32mINFO[39m (17643): [36mdatabase opened[39m
+    [35mpath[39m: ":memory:"
+[15:07:08.104] [33mWARN[39m (17643): [36mprovider blacklisted[39m
+    [35mprovider[39m: "openai"
+    [35mreason[39m: "high_failure_rate"
+    [35mblacklistedUntil[39m: 1779827828
+[15:07:08.104] [33mWARN[39m (17643): [36magent fired[39m
+    [35magentId[39m: "7aa8a980-c079-495e-a9ad-369ac7da1eff"
+    [35mprovider[39m: "openai"
+    [35mmodel[39m: "gpt-4o"
+    [35msignal[39m: "high_failure_rate"
+[15:07:08.105] [33mWARN[39m (17643): [36mno fallback provider available for replacement[39m
+    [35mswarmId[39m: "c5cc9cb6-5e9e-4b5b-b90d-b34ae5bb54cd"
+[15:07:08.106] [32mINFO[39m (17643): [36mdatabase opened[39m
+    [35mpath[39m: ":memory:"
+[15:07:08.108] [33mWARN[39m (17643): [36mprovider blacklisted[39m
+    [35mprovider[39m: "openai"
+    [35mreason[39m: "consecutive_failures"
+    [35mblacklistedUntil[39m: 1779827828
+[15:07:08.108] [33mWARN[39m (17643): [36magent fired[39m
+    [35magentId[39m: "e47815f4-c2bf-4b06-9892-fb0d93d9c2a5"
+    [35mprovider[39m: "openai"
+    [35mmodel[39m: "gpt-4o"
+    [35msignal[39m: "consecutive_failures"
+[15:07:08.108] [33mWARN[39m (17643): [36mno fallback provider available for replacement[39m
+    [35mswarmId[39m: "b5f18fb0-69d4-4022-a32f-765b2b3212ae"
+[15:07:08.109] [32mINFO[39m (17643): [36mdatabase opened[39m
+    [35mpath[39m: ":memory:"
+[15:07:08.111] [33mWARN[39m (17643): [36mprovider blacklisted[39m
+    [35mprovider[39m: "openai"
+    [35mreason[39m: "repeated_error_type"
+    [35mblacklistedUntil[39m: 1779827828
+[15:07:08.111] [33mWARN[39m (17643): [36magent fired[39m
+    [35magentId[39m: "5dbb4265-953d-4854-a3c7-e5304eff58ed"
+    [35mprovider[39m: "openai"
+    [35mmodel[39m: "gpt-4o"
+    [35msignal[39m: "repeated_error_type"
+[15:07:08.111] [33mWARN[39m (17643): [36mno fallback provider available for replacement[39m
+    [35mswarmId[39m: "92207397-9172-405d-be88-2fa4fd26b8e4"
+[15:07:08.111] [32mINFO[39m (17643): [36mdatabase opened[39m
+    [35mpath[39m: ":memory:"
+[15:07:08.115] [32mINFO[39m (17643): [36mdatabase opened[39m
+    [35mpath[39m: ":memory:"
+[15:07:08.117] [33mWARN[39m (17643): [36mprovider blacklisted[39m
+    [35mprovider[39m: "anthropic"
+    [35mreason[39m: "consecutive_failures"
+    [35mblacklistedUntil[39m: 1779827828
+[15:07:08.117] [33mWARN[39m (17643): [36magent fired[39m
+    [35magentId[39m: "e9803bd9-2089-4138-8555-e5b1e6617fb3"
+    [35mprovider[39m: "anthropic"
+    [35mmodel[39m: "gpt-4o"
+    [35msignal[39m: "consecutive_failures"
+[15:07:08.117] [33mWARN[39m (17643): [36mno fallback provider available for replacement[39m
+    [35mswarmId[39m: "8da98264-e11e-4ddf-af0d-09c27e469980"
+[15:07:08.116] [32mINFO[39m (17650): [36mdatabase opened[39m
+    [35mpath[39m: ":memory:"
+[15:07:08.134] [32mINFO[39m (17650): [36mapi key revoked[39m
+    [35mkeyId[39m: "8c2be4c2-e925-4dba-a7c7-0ac8487318ee"
+[15:07:08.120] [32mINFO[39m (17661): [36mdatabase opened[39m
+    [35mpath[39m: ":memory:"
+[15:07:08.130] [32mINFO[39m (17648): [36magent spawned[39m
+    [35mprovider[39m: "anthropic"
+    [35mmodel[39m: "claude-3-5-sonnet"
+[15:07:08.130] [32mINFO[39m (17648): [36magent completed[39m
+    [35mprovider[39m: "anthropic"
+    [35mmodel[39m: "claude-3-5-sonnet"
+    [35mdurationMs[39m: 1000
+    [35minputTokens[39m: 10
+    [35moutputTokens[39m: 20
+[15:07:08.132] [32mINFO[39m (17648): [36magent spawned[39m
+    [35mprovider[39m: "openai"
+    [35mmodel[39m: "gpt-4o"
+[15:07:08.132] [32mINFO[39m (17648): [36magent completed[39m
+    [35mprovider[39m: "openai"
+    [35mmodel[39m: "gpt-4o"
+    [35mdurationMs[39m: 1000
+    [35minputTokens[39m: 10
+    [35moutputTokens[39m: 20
+[15:07:08.133] [32mINFO[39m (17648): [36magent spawned[39m
+    [35mprovider[39m: "google"
+    [35mmodel[39m: "gemini-2.0-flash"
+[15:07:08.133] [32mINFO[39m (17648): [36magent completed[39m
+    [35mprovider[39m: "google"
+    [35mmodel[39m: "gemini-2.0-flash"
+    [35mdurationMs[39m: 1000
+    [35minputTokens[39m: 10
+    [35moutputTokens[39m: 20
+[15:07:08.133] [32mINFO[39m (17648): [36magent spawned[39m
+    [35mprovider[39m: "ollama"
+    [35mmodel[39m: "llama2"
+[15:07:08.134] [32mINFO[39m (17648): [36magent completed[39m
+    [35mprovider[39m: "ollama"
+    [35mmodel[39m: "llama2"
+    [35mdurationMs[39m: 1000
+    [35minputTokens[39m: 10
+    [35moutputTokens[39m: 20
+[15:07:08.134] [32mINFO[39m (17648): [36magent spawned[39m
+    [35mprovider[39m: "unknown"
+    [35mmodel[39m: "some-model"
+[15:07:08.139] [32mINFO[39m (17648): [36magent spawned[39m
+    [35mprovider[39m: "anthropic"
+    [35mmodel[39m: "claude-3-5-sonnet"
+[15:07:08.139] [32mINFO[39m (17648): [36magent completed[39m
+    [35mprovider[39m: "anthropic"
+    [35mmodel[39m: "claude-3-5-sonnet"
+    [35mdurationMs[39m: 5432
+    [35minputTokens[39m: 42
+    [35moutputTokens[39m: 137
+[15:07:08.176] [33mWARN[39m (17650): [36minvalid api key[39m
+    [35mpath[39m: "/protected"
+[15:07:08.177] [32mINFO[39m (17650): [36mdatabase opened[39m
+    [35mpath[39m: ":memory:"
+[15:07:08.236] [32mINFO[39m (17637): [36mdatabase opened[39m
+    [35mpath[39m: ":memory:"
+[15:07:08.239] [32mINFO[39m (17637): [36mglobal role created[39m
+    [35mglobalRoleId[39m: "1b9190d6-bff1-41d3-8ebc-0218da383b42"
+    [35mtitle[39m: "coder"
+[15:07:08.239] [32mINFO[39m (17637): [36mglobal role assigned to swarm[39m
+    [35mswarmId[39m: "0af8bf30-d3fe-4db1-9053-20a81065bcd4"
+    [35mglobalRoleId[39m: "1b9190d6-bff1-41d3-8ebc-0218da383b42"
+    [35mroleId[39m: "2162a703-9f9d-478d-a9f2-fffaed70795c"
+[15:07:08.241] [32mINFO[39m (17637): [36mdatabase opened[39m
+    [35mpath[39m: ":memory:"
+[15:07:08.242] [32mINFO[39m (17637): [36mglobal role created[39m
+    [35mglobalRoleId[39m: "9cc26dbc-8aff-4268-9977-2266c30c554a"
+    [35mtitle[39m: "reviewer"
+[15:07:08.243] [32mINFO[39m (17637): [36mglobal role assigned to swarm[39m
+    [35mswarmId[39m: "0c058214-4df0-4748-b1d5-2e1f8e44ded6"
+    [35mglobalRoleId[39m: "9cc26dbc-8aff-4268-9977-2266c30c554a"
+    [35mroleId[39m: "9afcbdb1-02aa-459e-852e-a69c36d0aa33"
+[15:07:08.243] [32mINFO[39m (17637): [36mdatabase opened[39m
+    [35mpath[39m: ":memory:"
+[15:07:08.245] [32mINFO[39m (17637): [36mglobal role created[39m
+    [35mglobalRoleId[39m: "e791b67a-2597-40d0-8890-840b6f9f1f90"
+    [35mtitle[39m: "writer"
+[15:07:08.245] [32mINFO[39m (17637): [36mglobal role assigned to swarm[39m
+    [35mswarmId[39m: "badace51-7b6f-4395-abe7-d1c836291d94"
+    [35mglobalRoleId[39m: "e791b67a-2597-40d0-8890-840b6f9f1f90"
+    [35mroleId[39m: "f8933281-2277-4fbf-948d-c6ef02414d4c"
+[15:07:08.245] [32mINFO[39m (17637): [36mrole system_prompt updated[39m
+    [35mroleId[39m: "f8933281-2277-4fbf-948d-c6ef02414d4c"
+[15:07:08.246] [32mINFO[39m (17637): [36mdatabase opened[39m
+    [35mpath[39m: ":memory:"
+[15:07:08.260] [32mINFO[39m (17637): [36mglobal role created[39m
+    [35mglobalRoleId[39m: "14c7dc6a-6197-4627-ba32-552bd959c45d"
+    [35mtitle[39m: "analyst"
+[15:07:08.272] [32mINFO[39m (17637): [36mglobal role assigned to swarm[39m
+    [35mswarmId[39m: "5cf5afca-79df-4944-a380-cf1844c7c75a"
+    [35mglobalRoleId[39m: "14c7dc6a-6197-4627-ba32-552bd959c45d"
+    [35mroleId[39m: "1f84ae50-efc4-4359-b72f-0c2311c810da"
+[15:07:08.310] [32mINFO[39m (17637): [36mrole system_prompt updated[39m
+    [35mroleId[39m: "1f84ae50-efc4-4359-b72f-0c2311c810da"
+[15:07:08.331] [32mINFO[39m (17637): [36mrole deleted[39m
+    [35mroleId[39m: "1f84ae50-efc4-4359-b72f-0c2311c810da"
+[15:07:08.352] [32mINFO[39m (17637): [36mdatabase opened[39m
+    [35mpath[39m: ":memory:"
+[15:07:08.373] [32mINFO[39m (17637): [36mdatabase opened[39m
+    [35mpath[39m: ":memory:"
+[15:07:08.393] [32mINFO[39m (17637): [36mglobal role created[39m
+    [35mglobalRoleId[39m: "af56ecb6-064c-4bc2-a795-e970bdaef7a7"
+    [35mtitle[39m: "generalist"
+[15:07:08.395] [32mINFO[39m (17637): [36mdatabase opened[39m
+    [35mpath[39m: ":memory:"
+[15:07:08.414] [32mINFO[39m (17637): [36mglobal role created[39m
+    [35mglobalRoleId[39m: "95c2c831-1e4b-4a25-96a2-3ef394382c67"
+    [35mtitle[39m: "coder"
+[15:07:08.435] [32mINFO[39m (17637): [36mglobal role assigned to swarm[39m
+    [35mswarmId[39m: "dc2c65ca-bd7e-48f5-ab07-f162c638196b"
+    [35mglobalRoleId[39m: "95c2c831-1e4b-4a25-96a2-3ef394382c67"
+    [35mroleId[39m: "ba5964b3-b0c9-4150-b6e3-f9e4cafbe5fd"
+PASS src/tests/jobs/jobManager.test.ts
+
+Test Suites: 1 failed, 16 passed, 17 total
+Tests:       1 failed, 64 passed, 65 total
+Snapshots:   0 total
+Time:        3.717 s, estimated 5 s
+Ran all test suites.

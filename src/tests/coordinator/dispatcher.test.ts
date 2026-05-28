@@ -79,7 +79,7 @@ describe('dispatcher', () => {
 
     (spawnAgent as jest.Mock).mockResolvedValue({
       provider: 'google',
-      model: 'gemini-2.5-flash',
+      model: 'gemini-3.1-flash-lite',
       output: JSON.stringify({
         action: 'hire',
         new_job_title: 'Next.js Project Creator',
@@ -111,6 +111,6 @@ describe('dispatcher', () => {
 
     expect(agents.length).toBeGreaterThan(0);
     expect(agents[0]?.provider).toBe('google');
-    expect(agents[0]?.model).toBe('gemini-2.5-flash');
+    expect(agents[0]?.model).toBe('gemini-3.1-flash-lite');
   });
 });
